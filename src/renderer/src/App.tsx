@@ -1,26 +1,27 @@
-import React from 'react'
-import './App.css'
+import { createHashRouter, RouterProvider } from 'react-router'
+import { Layout } from './components/Layout'
+import { Dashboard } from './pages/Dashboard'
+import { MeetingNotes } from './pages/MeetingNotes'
+import { Tasks } from './pages/Tasks'
+import { Documents } from './pages/Documents'
+import { Guide } from './pages/Guide'
+import { Settings } from './pages/Settings'
 
-function App(): React.JSX.Element {
-  return (
-    <div className="app">
-      <aside className="sidebar">
-        <h1 className="logo">캡스톤에이전트</h1>
-        <nav>
-          <ul>
-            <li className="active">프로젝트</li>
-            <li>회의록</li>
-            <li>태스크</li>
-            <li>질의</li>
-          </ul>
-        </nav>
-      </aside>
-      <main className="main">
-        <h2>프로젝트를 선택하세요</h2>
-        <p>왼쪽 사이드바에서 기능을 선택하거나 새 프로젝트를 만들어 시작하세요.</p>
-      </main>
-    </div>
-  )
+const router = createHashRouter([
+  {
+    path: '/',
+    Component: Layout,
+    children: [
+      { index: true, Component: Dashboard },
+      { path: 'meetings', Component: MeetingNotes },
+      { path: 'tasks', Component: Tasks },
+      { path: 'documents', Component: Documents },
+      { path: 'guide', Component: Guide },
+      { path: 'settings', Component: Settings },
+    ],
+  },
+])
+
+export default function App() {
+  return <RouterProvider router={router} />
 }
-
-export default App
