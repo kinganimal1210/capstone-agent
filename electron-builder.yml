@@ -1,0 +1,12 @@
+appId: com.capstone.agent
+productName: 캡스톤에이전트
+directories:
+  output: release
+files:
+  - dist/**/*
+  - node_modules/**/*
+  - package.json
+mac:
+  target: dmg
+win:
+  target: nsis
