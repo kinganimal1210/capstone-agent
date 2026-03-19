@@ -4,9 +4,10 @@
   "description": "선택형 데이터·도구 기반 데스크톱 AI 에이전트 시스템",
   "main": "dist/main/index.js",
   "scripts": {
-    "dev": "concurrently \"npm run dev:main\" \"npm run dev:renderer\"",
+    "dev": "concurrently \"npm run dev:main\" \"npm run dev:renderer\" \"npm run dev:electron\"",
     "dev:main": "tsc -p tsconfig.main.json --watch",
     "dev:renderer": "vite src/renderer",
+    "dev:electron": "wait-on http://localhost:5173 && NODE_ENV=development electron .",
     "build": "npm run build:main && npm run build:renderer",
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build src/renderer",
@@ -40,6 +41,7 @@
     "react-dom": "^18.2.0",
     "tailwindcss": "^4.1.12",
     "typescript": "^5.3.3",
-    "vite": "^5.0.12"
+    "vite": "^5.0.12",
+    "wait-on": "^9.0.4"
   }
 }
