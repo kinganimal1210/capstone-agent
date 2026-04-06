@@ -5,6 +5,7 @@ import { registerProjectHandlers } from './handlers/projectHandlers'
 import { registerMeetingHandlers } from './handlers/meetingHandlers'
 import { registerTaskHandlers } from './handlers/taskHandlers'
 import { registerQueryHandlers } from './handlers/queryHandlers'
+import { registerGitHandlers } from './handlers/gitHandlers'
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -22,7 +23,7 @@ function createWindow(): void {
   })
 
   if (isDev) {
-    win.loadURL('http://localhost:5173')
+    win.loadURL('http://localhost:5174')
     win.webContents.openDevTools()
   } else {
     win.loadFile(path.join(__dirname, '../renderer/index.html'))
@@ -38,6 +39,7 @@ app.whenReady().then(async () => {
   registerMeetingHandlers(ipcMain)
   registerTaskHandlers(ipcMain)
   registerQueryHandlers(ipcMain)
+  registerGitHandlers(ipcMain)
 
   createWindow()
 

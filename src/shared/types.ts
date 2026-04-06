@@ -70,3 +70,30 @@ export interface Task {
   createdAt: string
   updatedAt: string
 }
+
+// Git 변경 파일
+export interface GitChangedFile {
+  path: string
+  status: 'added' | 'modified' | 'deleted' | 'renamed'
+  additions: number
+  deletions: number
+}
+
+// Git 커밋
+export interface GitCommit {
+  hash: string
+  shortHash: string
+  message: string
+  author: string
+  date: string
+  changedFiles?: GitChangedFile[]
+}
+
+// Git 저장소 정보
+export interface GitRepoInfo {
+  path: string
+  currentBranch: string
+  totalCommits: number
+  lastCommitDate: string
+  remoteUrl?: string
+}

@@ -5,6 +5,7 @@ const navigation = [
   { name: 'Dashboard', path: '/', icon: GitBranch },
   { name: 'Meeting Notes', path: '/meetings', icon: MessageSquare },
   { name: 'Tasks', path: '/tasks', icon: CheckSquare },
+  { name: 'Git Activity', path: '/git', icon: GitBranch },
   { name: 'Documents', path: '/documents', icon: FileText },
   { name: 'Project Guide', path: '/guide', icon: Sparkles },
 ]

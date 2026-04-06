@@ -26,5 +26,14 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('tasks:updateStatus', id, status),
 
   // 질의
-  query: (request: QueryRequest) => ipcRenderer.invoke('query:run', request)
+  query: (request: QueryRequest) => ipcRenderer.invoke('query:run', request),
+
+  // Git
+  validateGitRepo: (repoPath: string) => ipcRenderer.invoke('git:validate', repoPath),
+  getGitRepoInfo: (repoPath: string) => ipcRenderer.invoke('git:repoInfo', repoPath),
+  getGitCommits: (repoPath: string, count?: number) =>
+    ipcRenderer.invoke('git:recentCommits', repoPath, count),
+  getGitCommitDetail: (repoPath: string, commitHash: string) =>
+    ipcRenderer.invoke('git:commitDetail', repoPath, commitHash),
+  selectGitFolder: () => ipcRenderer.invoke('git:selectFolder')
 })
