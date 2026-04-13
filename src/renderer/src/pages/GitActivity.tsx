@@ -18,20 +18,6 @@ import {
   Loader2
 } from 'lucide-react'
 
-// window.api 타입 선언
-declare global {
-  interface Window {
-    api: {
-      validateGitRepo: (path: string) => Promise<{ valid: boolean; error: string | null }>
-      getGitRepoInfo: (path: string) => Promise<{ data: GitRepoInfo | null; error: string | null }>
-      getGitCommits: (path: string, count?: number) => Promise<{ data: GitCommit[]; error: string | null }>
-      getGitCommitDetail: (path: string, hash: string) => Promise<{ data: GitCommit | null; error: string | null }>
-      selectGitFolder: () => Promise<{ path: string | null; valid?: boolean }>
-      [key: string]: unknown
-    }
-  }
-}
-
 interface GitChangedFile {
   path: string
   status: 'added' | 'modified' | 'deleted' | 'renamed'
@@ -96,8 +82,8 @@ export function GitActivity() {
         setError(commitsResult.error)
       }
 
-      setRepoInfo(infoResult.data)
-      setCommits(commitsResult.data || [])
+      setRepoInfo(infoResult.data as GitRepoInfo)
+      setCommits((commitsResult.data as GitCommit[]) || [])
       setIsConnected(true)
       setExpandedCommits(new Set())
       setCommitDetails(new Map())
@@ -151,7 +137,7 @@ export function GitActivity() {
       try {
         const result = await window.api.getGitCommitDetail(repoPath, commit.hash)
         if (result.data) {
-          setCommitDetails(prev => new Map(prev).set(commit.hash, result.data!))
+          setCommitDetails(prev => new Map(prev).set(commit.hash, result.data as GitCommit))
         }
       } catch (err) {
         console.error('커밋 상세 조회 실패:', err)

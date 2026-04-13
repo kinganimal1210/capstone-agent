@@ -1,0 +1,68 @@
+﻿
+[DB] 湲곗〈 ?곗씠?곕쿋?댁뒪 濡쒕뱶 ?꾨즺: C:\Users\wogns\AppData\Roaming\capstone-agent\capstone-agent.db
+[DB] ?곗씠?곕쿋?댁뒪 珥덇린???꾨즺
+node.exe : (node:9000) Unh
+andledPromiseRejectionWarn
+ing: Error: table projects
+ has no column named statu
+s
+위치 줄:1 문자:1
++ & "C:\Program Files\node
+js/node.exe" "C:\Users\wog
+ns\AppData\Roaming\ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: ((  
+  node:9000) Unh...mn n   
+ amed status:String) [    
+], RemoteException
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+    at e.handleError (C:\U
+sers\wogns\capstone-agent\
+node_modules\sql.js\dist\s
+ql-wasm.js:90:192)
+    at e.tb (C:\Users\wogn
+s\capstone-agent\node_modu
+les\sql.js\dist\sql-wasm.j
+s:88:454)
+    at e.run (C:\Users\wog
+ns\capstone-agent\node_mod
+ules\sql.js\dist\sql-wasm.
+js:87:209)
+    at Object.create (C:\U
+sers\wogns\capstone-agent\
+dist\main\database\reposit
+ories\projectRepository.js
+:38:12)
+    at ensureDefaultProjec
+t (C:\Users\wogns\capstone
+-agent\dist\main\index.js:
+44:42)
+    at C:\Users\wogns\caps
+tone-agent\dist\main\index
+.js:56:5
+(Use `electron --trace-war
+nings ...` to show where t
+he warning was created)
+(node:9000) UnhandledPromi
+seRejectionWarning: Unhand
+led promise rejection. Thi
+s error originated either 
+by throwing inside of an a
+sync function without a ca
+tch block, or by rejecting
+ a promise which was not h
+andled with .catch(). To t
+erminate the node process 
+on unhandled promise rejec
+tion, use the CLI flag `--
+unhandled-rejections=stric
+t` (see https://nodejs.org
+/api/cli.html#cli_unhandle
+d_rejections_mode). (rejec
+tion id: 1)

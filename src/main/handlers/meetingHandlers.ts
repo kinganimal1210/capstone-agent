@@ -1,35 +1,38 @@
 import { IpcMain } from 'electron'
-import { getDB, saveDB } from '../db'
+import { meetingRepository } from '../database/repositories'
 
 export function registerMeetingHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('meetings:getByProject', (_event, projectId: number) => {
-    const db = getDB()
-    const stmt = db.prepare(
-      'SELECT * FROM meetings WHERE project_id = ? ORDER BY date DESC'
-    )
-    stmt.bind([projectId])
-    const rows: Record<string, unknown>[] = []
-    while (stmt.step()) rows.push(stmt.getAsObject())
-    stmt.free()
-    return rows
+    return meetingRepository.getByProject(projectId)
+  })
+
+  ipcMain.handle('meetings:getById', (_event, id: number) => {
+    return meetingRepository.getById(id)
   })
 
   ipcMain.handle(
     'meetings:create',
     (_event, data: { projectId: number; title: string; content: string; date: string }) => {
-      const db = getDB()
-      db.run('INSERT INTO meetings (project_id, title, content, date) VALUES (?, ?, ?, ?)', [
-        data.projectId,
-        data.title,
-        data.content,
-        data.date
-      ])
-      saveDB()
-      const stmt = db.prepare('SELECT * FROM meetings ORDER BY id DESC LIMIT 1')
-      stmt.step()
-      const row = stmt.getAsObject()
-      stmt.free()
-      return row
+      return meetingRepository.create(data)
     }
   )
+
+  ipcMain.handle(
+    'meetings:update',
+    (_event, id: number, data: { title?: string; content?: string; date?: string; summary?: string }) => {
+      return meetingRepository.update(id, data)
+    }
+  )
+
+  ipcMain.handle('meetings:delete', (_event, id: number) => {
+    return meetingRepository.delete(id)
+  })
+
+  ipcMain.handle('meetings:getRecent', (_event, limit: number) => {
+    return meetingRepository.getRecent(limit)
+  })
+
+  ipcMain.handle('meetings:search', (_event, projectId: number, keyword: string) => {
+    return meetingRepository.search(projectId, keyword)
+  })
 }

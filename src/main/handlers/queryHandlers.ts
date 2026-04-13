@@ -1,21 +1,18 @@
 import { IpcMain } from 'electron'
-import { getDB, saveDB } from '../db'
+import { queryLogRepository, aiLogRepository, evidenceLogRepository } from '../database/repositories'
 import type { QueryRequest, QueryResponse } from '../../shared/types'
 
 export function registerQueryHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('query:run', async (_event, request: QueryRequest): Promise<QueryResponse> => {
-    const db = getDB()
+    const startTime = Date.now()
 
     // query_log 저장
-    db.run(
-      'INSERT INTO query_logs (project_id, sources, tool, prompt) VALUES (?, ?, ?, ?)',
-      [request.projectId, JSON.stringify(request.sources), request.tool, request.prompt]
-    )
-
-    const logStmt = db.prepare('SELECT id FROM query_logs ORDER BY id DESC LIMIT 1')
-    logStmt.step()
-    const { id: queryLogId } = logStmt.getAsObject()
-    logStmt.free()
+    const queryLogId = queryLogRepository.create({
+      projectId: request.projectId,
+      sources: JSON.stringify(request.sources),
+      tool: request.tool,
+      prompt: request.prompt
+    })
 
     // TODO: Week 7-12에서 실제 retrieval + LLM 연동 구현
     const response: QueryResponse = {
@@ -24,12 +21,34 @@ export function registerQueryHandlers(ipcMain: IpcMain): void {
       suggestedActions: ['retrieval 구현 후 실제 결과가 여기 표시됩니다.']
     }
 
-    db.run(
-      'INSERT INTO ai_logs (query_log_id, prompt_sent, raw_response) VALUES (?, ?, ?)',
-      [queryLogId as number, request.prompt, JSON.stringify(response)]
-    )
-    saveDB()
+    const durationMs = Date.now() - startTime
+
+    // AI 로그 저장
+    aiLogRepository.create({
+      queryLogId,
+      promptSent: request.prompt,
+      rawResponse: JSON.stringify(response)
+    })
+
+    // 쿼리 로그 상태 업데이트
+    queryLogRepository.updateStatus(queryLogId, 'success', JSON.stringify(response), durationMs)
 
     return response
+  })
+
+  // 쿼리 히스토리 조회
+  ipcMain.handle('query:getHistory', (_event, projectId: number, limit?: number) => {
+    return queryLogRepository.getByProject(projectId, limit)
+  })
+
+  // 특정 쿼리 로그 상세 조회
+  ipcMain.handle('query:getById', (_event, id: number) => {
+    const log = queryLogRepository.getById(id)
+    if (!log) return null
+
+    const aiLogs = aiLogRepository.getByQueryLogId(id)
+    const evidenceLogs = evidenceLogRepository.getByQueryLogId(id)
+
+    return { ...log, aiLogs, evidenceLogs }
   })
 }
