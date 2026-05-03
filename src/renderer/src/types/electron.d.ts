@@ -3,6 +3,8 @@
  * preload에서 노출한 API 메서드의 타입을 정의합니다.
  */
 
+import type { DataSource, EvidenceItem, QueryResponse, ToolType } from '../../../shared/types'
+
 export {}
 
 declare global {
@@ -53,17 +55,42 @@ declare global {
 
       // 문서
       selectDocumentFolder: () => Promise<{ path: string | null }>
+      selectDocumentFiles: () => Promise<{ filePaths: string[] }>
       scanDocuments: (data: { projectId: number; folderPath: string }) => Promise<{ error: string | null; count: number; total?: number }>
+      addDocumentFiles: (data: { projectId: number; filePaths: string[] }) => Promise<{ error: string | null; count: number; total?: number }>
       getDocuments: (projectId: number) => Promise<Record<string, unknown>[]>
       deleteDocument: (id: number) => Promise<boolean>
       deleteAllDocuments: (projectId: number) => Promise<number>
+      readDocumentContent: (filePath: string) => Promise<{
+        error: string | null
+        content: string | null
+        binary?: boolean
+        info?: string
+      }>
 
       // 질의
-      query: (request: { projectId: number; sources: string[]; tool: string; prompt: string }) => Promise<{
-        summary: string; evidence: unknown[]; suggestedActions: string[]; rawResponse?: string
-      }>
+      query: (request: { projectId: number; sources: DataSource[]; tool: ToolType; prompt: string }) => Promise<QueryResponse>
       getQueryHistory: (projectId: number, limit?: number) => Promise<Record<string, unknown>[]>
       getQueryById: (id: number) => Promise<Record<string, unknown> | null>
+
+      // 설정
+      getLLMSettings: () => Promise<{
+        provider: 'openai'
+        model: string
+        baseUrl: string
+        hasApiKey: boolean
+      }>
+      updateLLMSettings: (data: {
+        provider?: 'openai'
+        model?: string
+        apiKey?: string
+        baseUrl?: string
+      }) => Promise<{
+        provider: 'openai'
+        model: string
+        baseUrl: string
+        hasApiKey: boolean
+      }>
 
       // Git
       validateGitRepo: (path: string) => Promise<{ valid: boolean; error: string | null }>

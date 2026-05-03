@@ -76,6 +76,11 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('query:getHistory', projectId, limit),
   getQueryById: (id: number) => ipcRenderer.invoke('query:getById', id),
 
+  // ── 설정 ───────────────────────────────────────────────────
+  getLLMSettings: () => ipcRenderer.invoke('settings:getLLM'),
+  updateLLMSettings: (data: { provider?: 'openai'; model?: string; apiKey?: string; baseUrl?: string }) =>
+    ipcRenderer.invoke('settings:updateLLM', data),
+
   // ── Git ──────────────────────────────────────────────────
   validateGitRepo: (repoPath: string) => ipcRenderer.invoke('git:validate', repoPath),
   getGitRepoInfo: (repoPath: string) => ipcRenderer.invoke('git:repoInfo', repoPath),

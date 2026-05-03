@@ -8,6 +8,7 @@ import { registerTaskHandlers } from './handlers/taskHandlers'
 import { registerQueryHandlers } from './handlers/queryHandlers'
 import { registerGitHandlers } from './handlers/gitHandlers'
 import { registerDocumentHandlers } from './handlers/documentHandlers'
+import { registerSettingsHandlers } from './handlers/settingsHandlers'
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -62,6 +63,7 @@ app.whenReady().then(async () => {
   registerQueryHandlers(ipcMain)
   registerGitHandlers(ipcMain)
   registerDocumentHandlers(ipcMain)
+  registerSettingsHandlers(ipcMain)
 
   createWindow()
 
