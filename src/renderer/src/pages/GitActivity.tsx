@@ -42,17 +42,24 @@ interface GitRepoInfo {
   remoteUrl?: string
 }
 
+interface GitBranchRef {
+  name: string
+  isCurrent: boolean
+  scope: 'local' | 'remote'
+}
+
 const DEFAULT_PROJECT_ID = 1
 const GIT_ACTIVITY_STATE_KEY = 'capstone-agent:git-activity-state'
 
 interface GitActivityPersistedState {
   repoPath: string
   commitCount: number
+  selectedBranch: string
 }
 
 function loadGitActivityState(): GitActivityPersistedState {
   if (typeof window === 'undefined') {
-    return { repoPath: '', commitCount: 30 }
+    return { repoPath: '', commitCount: 30, selectedBranch: '' }
   }
 
   try {
@@ -60,7 +67,7 @@ function loadGitActivityState(): GitActivityPersistedState {
     if (!raw) throw new Error('missing')
     return JSON.parse(raw) as GitActivityPersistedState
   } catch {
-    return { repoPath: '', commitCount: 30 }
+    return { repoPath: '', commitCount: 30, selectedBranch: '' }
   }
 }
 
@@ -75,9 +82,11 @@ export function GitActivity() {
   const [isLoadingDetail, setIsLoadingDetail] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [commitCount, setCommitCount] = useState(() => loadGitActivityState().commitCount)
+  const [branches, setBranches] = useState<GitBranchRef[]>([])
+  const [selectedBranch, setSelectedBranch] = useState(() => loadGitActivityState().selectedBranch)
 
   // 저장소 연결
-  const connectRepo = useCallback(async (path: string) => {
+  const connectRepo = useCallback(async (path: string, requestedBranch?: string) => {
     if (!path.trim()) return
     setIsLoading(true)
     setError(null)
@@ -99,7 +108,29 @@ export function GitActivity() {
         return
       }
 
-      const commitsResult = await window.api.getGitCommits(path, commitCount)
+      const branchesResult = await window.api.getGitBranches(path)
+      if (branchesResult.error) {
+        setError(branchesResult.error)
+      }
+
+      const branchItems = branchesResult.data || []
+      const fallbackBranch = branchItems.find((branch) => branch.isCurrent)?.name || ''
+      const activeBranch =
+        requestedBranch && branchItems.some((branch) => branch.name === requestedBranch)
+          ? requestedBranch
+          : fallbackBranch
+
+      const repoInfoForBranchResult = activeBranch
+        ? await window.api.getGitBranchRepoInfo(path, activeBranch)
+        : infoResult
+      if (repoInfoForBranchResult.error || !repoInfoForBranchResult.data) {
+        setError(repoInfoForBranchResult.error || '브랜치 정보를 가져올 수 없습니다.')
+        setIsConnected(false)
+        setIsLoading(false)
+        return
+      }
+
+      const commitsResult = await window.api.getGitCommits(path, commitCount, activeBranch || undefined)
       if (commitsResult.error) {
         setError(commitsResult.error)
       }
@@ -108,7 +139,9 @@ export function GitActivity() {
         gitPath: path
       })
 
-      setRepoInfo(infoResult.data as GitRepoInfo)
+      setBranches(branchItems as GitBranchRef[])
+      setSelectedBranch(activeBranch)
+      setRepoInfo(repoInfoForBranchResult.data as GitRepoInfo)
       setCommits((commitsResult.data as GitCommit[]) || [])
       setRepoPath(path)
       setIsConnected(true)
@@ -127,10 +160,11 @@ export function GitActivity() {
       GIT_ACTIVITY_STATE_KEY,
       JSON.stringify({
         repoPath,
-        commitCount
+        commitCount,
+        selectedBranch
       } satisfies GitActivityPersistedState)
     )
-  }, [repoPath, commitCount])
+  }, [repoPath, commitCount, selectedBranch])
 
   useEffect(() => {
     const restoreRepo = async () => {
@@ -145,7 +179,7 @@ export function GitActivity() {
 
         if (!nextRepoPath.trim()) return
         setRepoPath(nextRepoPath)
-        await connectRepo(nextRepoPath)
+        await connectRepo(nextRepoPath, persisted.selectedBranch)
       } catch (err) {
         setError((err as Error).message)
       }
@@ -174,7 +208,13 @@ export function GitActivity() {
 
   // 새로고침
   const handleRefresh = () => {
-    if (repoPath) connectRepo(repoPath)
+    if (repoPath) connectRepo(repoPath, selectedBranch)
+  }
+
+  const handleBranchChange = async (branchName: string) => {
+    setSelectedBranch(branchName)
+    if (!repoPath.trim()) return
+    await connectRepo(repoPath, branchName)
   }
 
   // 커밋 확장/축소
@@ -318,6 +358,26 @@ export function GitActivity() {
             저장소가 연결되었습니다
           </div>
         )}
+
+        {isConnected && branches.length > 0 && (
+          <div className="mt-4">
+            <label className="text-sm mb-2 block text-foreground">조회 브랜치</label>
+            <select
+              value={selectedBranch}
+              onChange={(e) => void handleBranchChange(e.target.value)}
+              className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {branches.map((branch) => (
+                <option key={branch.name} value={branch.name}>
+                  {branch.name}{branch.isCurrent ? ' (checked out)' : ''}{branch.scope === 'remote' ? ' [remote]' : ''}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">
+              저장소를 checkout하지 않고 선택한 브랜치의 커밋 히스토리를 조회합니다.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* 저장소 정보 카드 */}
@@ -326,7 +386,14 @@ export function GitActivity() {
           <div className="bg-card border border-border rounded-lg p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-2">
               <GitBranch className="w-3.5 h-3.5" />
-              현재 브랜치
+              조회 브랜치
+            </div>
+            <p className="text-foreground font-medium text-sm truncate">{selectedBranch || repoInfo.currentBranch}</p>
+          </div>
+          <div className="bg-card border border-border rounded-lg p-4">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-2">
+              <GitBranch className="w-3.5 h-3.5" />
+              체크아웃 브랜치
             </div>
             <p className="text-foreground font-medium text-sm truncate">{repoInfo.currentBranch}</p>
           </div>

@@ -84,8 +84,11 @@ contextBridge.exposeInMainWorld('api', {
   // ── Git ──────────────────────────────────────────────────
   validateGitRepo: (repoPath: string) => ipcRenderer.invoke('git:validate', repoPath),
   getGitRepoInfo: (repoPath: string) => ipcRenderer.invoke('git:repoInfo', repoPath),
-  getGitCommits: (repoPath: string, count?: number) =>
-    ipcRenderer.invoke('git:recentCommits', repoPath, count),
+  getGitBranches: (repoPath: string) => ipcRenderer.invoke('git:branches', repoPath),
+  getGitBranchRepoInfo: (repoPath: string, ref: string) =>
+    ipcRenderer.invoke('git:branchRepoInfo', repoPath, ref),
+  getGitCommits: (repoPath: string, count?: number, ref?: string) =>
+    ipcRenderer.invoke('git:recentCommits', repoPath, count, ref),
   getGitCommitDetail: (repoPath: string, commitHash: string) =>
     ipcRenderer.invoke('git:commitDetail', repoPath, commitHash),
   selectGitFolder: () => ipcRenderer.invoke('git:selectFolder')

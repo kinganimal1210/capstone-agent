@@ -1,5 +1,5 @@
 import { IpcMain, dialog, BrowserWindow } from 'electron'
-import { isValidGitRepo, getRepoInfo, getRecentCommits, getCommitDetail } from '../services/gitService'
+import { isValidGitRepo, getRepoInfo, getRecentCommits, getCommitDetail, getBranchRefs, getBranchRepoInfo } from '../services/gitService'
 
 export function registerGitHandlers(ipcMain: IpcMain): void {
   // Git 저장소 유효성 검증
@@ -24,13 +24,36 @@ export function registerGitHandlers(ipcMain: IpcMain): void {
     }
   })
 
-  // 최근 커밋 목록 조회
-  ipcMain.handle('git:recentCommits', (_event, repoPath: string, count?: number) => {
+  ipcMain.handle('git:branches', (_event, repoPath: string) => {
     try {
       if (!isValidGitRepo(repoPath)) {
         return { data: [], error: '유효한 Git 저장소가 아닙니다.' }
       }
-      const commits = getRecentCommits(repoPath, count ?? 30)
+      return { data: getBranchRefs(repoPath), error: null }
+    } catch (error) {
+      return { data: [], error: (error as Error).message }
+    }
+  })
+
+  ipcMain.handle('git:branchRepoInfo', (_event, repoPath: string, ref: string) => {
+    try {
+      if (!isValidGitRepo(repoPath)) {
+        return { data: null, error: '유효한 Git 저장소가 아닙니다.' }
+      }
+      const info = ref ? getBranchRepoInfo(repoPath, ref) : getRepoInfo(repoPath)
+      return { data: info, error: null }
+    } catch (error) {
+      return { data: null, error: (error as Error).message }
+    }
+  })
+
+  // 최근 커밋 목록 조회
+  ipcMain.handle('git:recentCommits', (_event, repoPath: string, count?: number, ref?: string) => {
+    try {
+      if (!isValidGitRepo(repoPath)) {
+        return { data: [], error: '유효한 Git 저장소가 아닙니다.' }
+      }
+      const commits = getRecentCommits(repoPath, count ?? 30, ref)
       return { data: commits, error: null }
     } catch (error) {
       return { data: [], error: (error as Error).message }

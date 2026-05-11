@@ -95,7 +95,9 @@ declare global {
       // Git
       validateGitRepo: (path: string) => Promise<{ valid: boolean; error: string | null }>
       getGitRepoInfo: (path: string) => Promise<{ data: { path: string; currentBranch: string; totalCommits: number; lastCommitDate: string; remoteUrl?: string } | null; error: string | null }>
-      getGitCommits: (path: string, count?: number) => Promise<{ data: { hash: string; shortHash: string; message: string; author: string; date: string; changedFiles?: { path: string; status: string; additions: number; deletions: number }[] }[]; error: string | null }>
+      getGitBranches: (path: string) => Promise<{ data: { name: string; isCurrent: boolean; scope: 'local' | 'remote' }[]; error: string | null }>
+      getGitBranchRepoInfo: (path: string, ref: string) => Promise<{ data: { path: string; currentBranch: string; totalCommits: number; lastCommitDate: string; remoteUrl?: string } | null; error: string | null }>
+      getGitCommits: (path: string, count?: number, ref?: string) => Promise<{ data: { hash: string; shortHash: string; message: string; author: string; date: string; changedFiles?: { path: string; status: string; additions: number; deletions: number }[] }[]; error: string | null }>
       getGitCommitDetail: (path: string, hash: string) => Promise<{ data: { hash: string; shortHash: string; message: string; author: string; date: string; changedFiles?: { path: string; status: string; additions: number; deletions: number }[] } | null; error: string | null }>
       selectGitFolder: () => Promise<{ path: string | null; valid?: boolean }>
 
