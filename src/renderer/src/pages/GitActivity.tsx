@@ -42,6 +42,7 @@ interface GitRepoInfo {
   remoteUrl?: string
 }
 
+const DEFAULT_PROJECT_ID = 1
 const GIT_ACTIVITY_STATE_KEY = 'capstone-agent:git-activity-state'
 
 interface GitActivityPersistedState {
@@ -103,6 +104,10 @@ export function GitActivity() {
         setError(commitsResult.error)
       }
 
+      await window.api.updateProject(DEFAULT_PROJECT_ID, {
+        gitPath: path
+      })
+
       setRepoInfo(infoResult.data as GitRepoInfo)
       setCommits((commitsResult.data as GitCommit[]) || [])
       setRepoPath(path)
@@ -128,9 +133,25 @@ export function GitActivity() {
   }, [repoPath, commitCount])
 
   useEffect(() => {
-    const persisted = loadGitActivityState()
-    if (!persisted.repoPath.trim()) return
-    void connectRepo(persisted.repoPath)
+    const restoreRepo = async () => {
+      try {
+        const project = await window.api.getProjectById(DEFAULT_PROJECT_ID)
+        const savedProjectRepoPath =
+          typeof project?.git_path === 'string' && project.git_path.trim()
+            ? project.git_path
+            : ''
+        const persisted = loadGitActivityState()
+        const nextRepoPath = savedProjectRepoPath || persisted.repoPath
+
+        if (!nextRepoPath.trim()) return
+        setRepoPath(nextRepoPath)
+        await connectRepo(nextRepoPath)
+      } catch (err) {
+        setError((err as Error).message)
+      }
+    }
+
+    void restoreRepo()
   }, [connectRepo])
 
   // 폴더 선택 다이얼로그

@@ -194,7 +194,7 @@ export function Settings() {
               </button>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              `git-progress-analyzer`와 Git 기반 요약은 여기 저장한 경로를 사용합니다.
+              여기 저장한 경로는 Dashboard와 Git Activity가 함께 사용합니다.
             </p>
           </div>
         </div>
