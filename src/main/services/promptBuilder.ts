@@ -8,7 +8,7 @@
  */
 
 import { preprocessPrompt } from './promptPreprocessor'
-import { buildContext, type ContextBuildResult } from './contextChunker'
+import { buildContext, estimateTokens, type ContextBuildResult } from './contextChunker'
 
 // ── 시스템 프롬프트 템플릿 ───────────────────────────────────────
 // 간결한 지시로 토큰 절약 (불필요한 수식어 제거)
@@ -37,8 +37,8 @@ export interface PromptBuildInput {
 
   /** 검색된 소스 데이터 */
   sources: {
-    type: 'meeting' | 'task' | 'document'
-    id: number
+    type: 'meeting' | 'task' | 'document' | 'git'
+    id: number | string
     title: string
     content: string
   }[]
@@ -145,7 +145,7 @@ export function buildPrompt(input: PromptBuildInput): PromptBuildResult {
     contextChars: contextResult.stats.totalChars,
     questionChars: cleanedQuery.length,
     totalChars: finalPrompt.length,
-    estimatedTokens: Math.ceil(finalPrompt.length / 1.5),
+    estimatedTokens: estimateTokens(finalPrompt),
   }
 
   return {
