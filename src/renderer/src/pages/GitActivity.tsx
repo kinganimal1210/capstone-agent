@@ -42,8 +42,29 @@ interface GitRepoInfo {
   remoteUrl?: string
 }
 
+const GIT_ACTIVITY_STATE_KEY = 'capstone-agent:git-activity-state'
+
+interface GitActivityPersistedState {
+  repoPath: string
+  commitCount: number
+}
+
+function loadGitActivityState(): GitActivityPersistedState {
+  if (typeof window === 'undefined') {
+    return { repoPath: '', commitCount: 30 }
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(GIT_ACTIVITY_STATE_KEY)
+    if (!raw) throw new Error('missing')
+    return JSON.parse(raw) as GitActivityPersistedState
+  } catch {
+    return { repoPath: '', commitCount: 30 }
+  }
+}
+
 export function GitActivity() {
-  const [repoPath, setRepoPath] = useState('')
+  const [repoPath, setRepoPath] = useState(() => loadGitActivityState().repoPath)
   const [repoInfo, setRepoInfo] = useState<GitRepoInfo | null>(null)
   const [commits, setCommits] = useState<GitCommit[]>([])
   const [expandedCommits, setExpandedCommits] = useState<Set<string>>(new Set())
@@ -52,7 +73,7 @@ export function GitActivity() {
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingDetail, setIsLoadingDetail] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [commitCount, setCommitCount] = useState(30)
+  const [commitCount, setCommitCount] = useState(() => loadGitActivityState().commitCount)
 
   // 저장소 연결
   const connectRepo = useCallback(async (path: string) => {
@@ -84,6 +105,7 @@ export function GitActivity() {
 
       setRepoInfo(infoResult.data as GitRepoInfo)
       setCommits((commitsResult.data as GitCommit[]) || [])
+      setRepoPath(path)
       setIsConnected(true)
       setExpandedCommits(new Set())
       setCommitDetails(new Map())
@@ -94,6 +116,22 @@ export function GitActivity() {
       setIsLoading(false)
     }
   }, [commitCount])
+
+  useEffect(() => {
+    window.sessionStorage.setItem(
+      GIT_ACTIVITY_STATE_KEY,
+      JSON.stringify({
+        repoPath,
+        commitCount
+      } satisfies GitActivityPersistedState)
+    )
+  }, [repoPath, commitCount])
+
+  useEffect(() => {
+    const persisted = loadGitActivityState()
+    if (!persisted.repoPath.trim()) return
+    void connectRepo(persisted.repoPath)
+  }, [connectRepo])
 
   // 폴더 선택 다이얼로그
   const handleSelectFolder = async () => {
