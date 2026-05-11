@@ -44,6 +44,7 @@ interface GitRepoInfo {
 
 interface GitBranchRef {
   name: string
+  ref: string
   isCurrent: boolean
   scope: 'local' | 'remote'
 }
@@ -130,9 +131,9 @@ export function GitActivity() {
         }
 
         branchItems = branchesResult.data || []
-        const fallbackBranch = branchItems.find((branch) => branch.isCurrent)?.name || ''
+        const fallbackBranch = branchItems.find((branch) => branch.isCurrent)?.ref || ''
         activeBranch =
-          requestedBranch && branchItems.some((branch) => branch.name === requestedBranch)
+          requestedBranch && branchItems.some((branch) => branch.ref === requestedBranch)
             ? requestedBranch
             : fallbackBranch
 
@@ -152,6 +153,7 @@ export function GitActivity() {
         branchItems = [
           {
             name: activeBranch,
+            ref: activeBranch,
             isCurrent: true,
             scope: 'local'
           }
@@ -396,8 +398,8 @@ export function GitActivity() {
               className="w-full px-3 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               {branches.map((branch) => (
-                <option key={branch.name} value={branch.name}>
-                  {branch.name}{branch.isCurrent ? ' (checked out)' : ''}{branch.scope === 'remote' ? ' [remote]' : ''}
+                <option key={branch.ref} value={branch.ref}>
+                  {branch.name}{branch.isCurrent ? ' (checked out)' : ''}{branch.scope === 'remote' ? ' [remote only]' : ''}
                 </option>
               ))}
             </select>
@@ -416,7 +418,9 @@ export function GitActivity() {
               <GitBranch className="w-3.5 h-3.5" />
               조회 브랜치
             </div>
-            <p className="text-foreground font-medium text-sm truncate">{selectedBranch || repoInfo.currentBranch}</p>
+            <p className="text-foreground font-medium text-sm truncate">
+              {branches.find((branch) => branch.ref === selectedBranch)?.name || selectedBranch || repoInfo.currentBranch}
+            </p>
           </div>
           <div className="bg-card border border-border rounded-lg p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-2">

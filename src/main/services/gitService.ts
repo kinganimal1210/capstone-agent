@@ -5,6 +5,7 @@ import type { GitCommit, GitChangedFile, GitRepoInfo } from '../../shared/types'
 
 export interface GitBranchRef {
   name: string
+  ref: string
   isCurrent: boolean
   scope: 'local' | 'remote'
 }
@@ -80,21 +81,42 @@ export function getBranchRefs(repoPath: string): GitBranchRef[] {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const [name, headMark, fullRef] = line.split('|')
+      const [shortName, headMark, fullRef] = line.split('|')
       const scope: GitBranchRef['scope'] = fullRef.startsWith('refs/remotes/') ? 'remote' : 'local'
+      const displayName = scope === 'remote' && shortName.startsWith('origin/')
+        ? shortName.slice('origin/'.length)
+        : shortName
       return {
-        name,
+        name: displayName,
+        ref: shortName,
         isCurrent: headMark === '*',
         scope
       }
     })
-    .filter((ref) => !ref.name.endsWith('/HEAD'))
+    .filter((ref) => ref.name !== 'origin')
+    .filter((ref) => !ref.ref.endsWith('/HEAD'))
 
-  const seen = new Set<string>()
-  return refs.filter((ref) => {
-    if (seen.has(ref.name)) return false
-    seen.add(ref.name)
-    return true
+  const branchMap = new Map<string, GitBranchRef>()
+  for (const ref of refs) {
+    const existing = branchMap.get(ref.name)
+    if (!existing) {
+      branchMap.set(ref.name, ref)
+      continue
+    }
+
+    const shouldReplace =
+      (ref.scope === 'local' && existing.scope === 'remote') ||
+      (ref.isCurrent && !existing.isCurrent)
+
+    if (shouldReplace) {
+      branchMap.set(ref.name, ref)
+    }
+  }
+
+  return Array.from(branchMap.values()).sort((a, b) => {
+    if (a.isCurrent && !b.isCurrent) return -1
+    if (!a.isCurrent && b.isCurrent) return 1
+    return a.name.localeCompare(b.name)
   })
 }
 
