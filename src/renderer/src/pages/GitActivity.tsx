@@ -48,6 +48,11 @@ interface GitBranchRef {
   scope: 'local' | 'remote'
 }
 
+interface GitApiCompat {
+  getGitBranches?: (repoPath: string) => Promise<{ data: GitBranchRef[]; error: string | null }>
+  getGitBranchRepoInfo?: (repoPath: string, ref: string) => Promise<{ data: GitRepoInfo | null; error: string | null }>
+}
+
 const DEFAULT_PROJECT_ID = 1
 const GIT_ACTIVITY_STATE_KEY = 'capstone-agent:git-activity-state'
 
@@ -85,6 +90,8 @@ export function GitActivity() {
   const [branches, setBranches] = useState<GitBranchRef[]>([])
   const [selectedBranch, setSelectedBranch] = useState(() => loadGitActivityState().selectedBranch)
 
+  const gitApiCompat = window.api as typeof window.api & GitApiCompat
+
   // 저장소 연결
   const connectRepo = useCallback(async (path: string, requestedBranch?: string) => {
     if (!path.trim()) return
@@ -108,26 +115,47 @@ export function GitActivity() {
         return
       }
 
-      const branchesResult = await window.api.getGitBranches(path)
-      if (branchesResult.error) {
-        setError(branchesResult.error)
-      }
+      const supportsBranchApi =
+        typeof gitApiCompat.getGitBranches === 'function' &&
+        typeof gitApiCompat.getGitBranchRepoInfo === 'function'
 
-      const branchItems = branchesResult.data || []
-      const fallbackBranch = branchItems.find((branch) => branch.isCurrent)?.name || ''
-      const activeBranch =
-        requestedBranch && branchItems.some((branch) => branch.name === requestedBranch)
-          ? requestedBranch
-          : fallbackBranch
+      let branchItems: GitBranchRef[] = []
+      let activeBranch = ''
+      let repoInfoForBranch: GitRepoInfo = infoResult.data as GitRepoInfo
 
-      const repoInfoForBranchResult = activeBranch
-        ? await window.api.getGitBranchRepoInfo(path, activeBranch)
-        : infoResult
-      if (repoInfoForBranchResult.error || !repoInfoForBranchResult.data) {
-        setError(repoInfoForBranchResult.error || '브랜치 정보를 가져올 수 없습니다.')
-        setIsConnected(false)
-        setIsLoading(false)
-        return
+      if (supportsBranchApi) {
+        const branchesResult = await gitApiCompat.getGitBranches!(path)
+        if (branchesResult.error) {
+          setError(branchesResult.error)
+        }
+
+        branchItems = branchesResult.data || []
+        const fallbackBranch = branchItems.find((branch) => branch.isCurrent)?.name || ''
+        activeBranch =
+          requestedBranch && branchItems.some((branch) => branch.name === requestedBranch)
+            ? requestedBranch
+            : fallbackBranch
+
+        const repoInfoForBranchResult = activeBranch
+          ? await gitApiCompat.getGitBranchRepoInfo!(path, activeBranch)
+          : infoResult
+        if (repoInfoForBranchResult.error || !repoInfoForBranchResult.data) {
+          setError(repoInfoForBranchResult.error || '브랜치 정보를 가져올 수 없습니다.')
+          setIsConnected(false)
+          setIsLoading(false)
+          return
+        }
+
+        repoInfoForBranch = repoInfoForBranchResult.data as GitRepoInfo
+      } else {
+        activeBranch = (infoResult.data as GitRepoInfo).currentBranch
+        branchItems = [
+          {
+            name: activeBranch,
+            isCurrent: true,
+            scope: 'local'
+          }
+        ]
       }
 
       const commitsResult = await window.api.getGitCommits(path, commitCount, activeBranch || undefined)
@@ -141,7 +169,7 @@ export function GitActivity() {
 
       setBranches(branchItems as GitBranchRef[])
       setSelectedBranch(activeBranch)
-      setRepoInfo(repoInfoForBranchResult.data as GitRepoInfo)
+      setRepoInfo(repoInfoForBranch)
       setCommits((commitsResult.data as GitCommit[]) || [])
       setRepoPath(path)
       setIsConnected(true)
