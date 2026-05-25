@@ -87,6 +87,9 @@ export function GitActivity() {
       setIsConnected(true)
       setExpandedCommits(new Set())
       setCommitDetails(new Map())
+      
+      // 상태 저장 (탭을 이동해도 유지되도록)
+      localStorage.setItem('gitRepoPath', path)
     } catch (err) {
       setError((err as Error).message)
       setIsConnected(false)
@@ -94,6 +97,16 @@ export function GitActivity() {
       setIsLoading(false)
     }
   }, [commitCount])
+
+  // 컴포넌트 마운트(탭 진입) 시 저장된 경로가 있으면 자동 연결
+  useEffect(() => {
+    const savedPath = localStorage.getItem('gitRepoPath')
+    if (savedPath) {
+      setRepoPath(savedPath)
+      connectRepo(savedPath)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // 폴더 선택 다이얼로그
   const handleSelectFolder = async () => {

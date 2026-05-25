@@ -1,9 +1,10 @@
-import { CheckCircle2, AlertCircle, FileText, ChevronRight } from 'lucide-react'
+import { CheckCircle2, AlertCircle, FileText, ChevronRight, ThumbsUp, ThumbsDown } from 'lucide-react'
 
 interface Evidence {
   source: string
   title: string
   snippet: string
+  dbId?: number
 }
 
 interface SuggestedAction {
@@ -16,9 +17,11 @@ interface ResultDisplayProps {
   summary: string
   evidence: Evidence[]
   suggestedActions: SuggestedAction[]
+  feedbacks?: Record<number, 'interested' | 'not_interested'>
+  onFeedbackChange?: (dbId: number, type: 'interested' | 'not_interested') => void
 }
 
-export function ResultDisplay({ summary, evidence, suggestedActions }: ResultDisplayProps) {
+export function ResultDisplay({ summary, evidence, suggestedActions, feedbacks = {}, onFeedbackChange }: ResultDisplayProps) {
   return (
     <div className="space-y-6">
       {/* Summary */}
@@ -32,7 +35,7 @@ export function ResultDisplay({ summary, evidence, suggestedActions }: ResultDis
             <p className="text-sm text-muted-foreground">분석 결과 요약</p>
           </div>
         </div>
-        <p className="text-foreground leading-relaxed text-sm">{summary}</p>
+        <p className="text-foreground leading-relaxed text-sm whitespace-pre-wrap">{summary}</p>
       </div>
 
       {/* Evidence */}
@@ -56,7 +59,25 @@ export function ResultDisplay({ summary, evidence, suggestedActions }: ResultDis
                     <span className="text-sm text-foreground">{item.title}</span>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                {item.dbId && onFeedbackChange && (
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button 
+                      onClick={() => onFeedbackChange(item.dbId!, 'interested')}
+                      className={`p-1.5 rounded transition-colors ${feedbacks[item.dbId] === 'interested' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-accent'}`}
+                      title="관심있음"
+                    >
+                      <ThumbsUp className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => onFeedbackChange(item.dbId!, 'not_interested')}
+                      className={`p-1.5 rounded transition-colors ${feedbacks[item.dbId] === 'not_interested' ? 'bg-destructive/20 text-destructive' : 'text-muted-foreground hover:bg-accent'}`}
+                      title="관심없음"
+                    >
+                      <ThumbsDown className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                {!onFeedbackChange && <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
               </div>
               <p className="text-xs text-muted-foreground">{item.snippet}</p>
             </div>

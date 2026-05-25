@@ -14,6 +14,7 @@ export type ToolType =
 
 export interface EvidenceItem {
   id: string
+  dbId?: number
   source: DataSource
   title: string
   content: string
@@ -32,6 +33,7 @@ export interface QueryRequest {
 }
 
 export interface QueryResponse {
+  queryLogId?: number
   summary: string
   evidence: EvidenceItem[]
   suggestedActions: string[]
@@ -198,4 +200,31 @@ export interface GitRepoInfo {
   totalCommits: number
   lastCommitDate: string
   remoteUrl?: string
+}
+
+// ── 질문 유형 분류 ──────────────────────────────────────────────
+
+export type QuestionLength = 'short' | 'long'
+export type QuestionComplexity = 'simple' | 'complex'
+export type QuestionType = 'short_simple' | 'short_complex' | 'long_simple' | 'long_complex'
+
+// ── Evidence 피드백 ─────────────────────────────────────────────
+
+export type EvidenceFeedbackType = 'interested' | 'not_interested'
+
+export interface EvidenceFeedbackRequest {
+  userId: string
+  queryLogId: number
+  evidenceLogId: number
+  feedback: EvidenceFeedbackType
+  questionType: QuestionType
+}
+
+// ── 청킹 파라미터 ───────────────────────────────────────────────
+
+export interface ChunkingParams {
+  chunkSize: number
+  overlap: number
+  topK: number
+  maxContextChars: number
 }

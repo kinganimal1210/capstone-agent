@@ -130,8 +130,8 @@ async function callClaude(
 
   // Claude 응답에서 텍스트 추출
   const content = response.content
-    .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
-    .map((block) => block.text)
+    .filter((block) => block.type === 'text')
+    .map((block: any) => block.text)
     .join('')
 
   return {

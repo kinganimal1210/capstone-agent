@@ -70,21 +70,20 @@ export const documentRepository = {
   },
 
   /**
-   * 여러 문서를 한번에 생성합니다 (스캔 결과 저장 시 사용).
+   * 여러 문서를 한번에 생성하고, 생성된 문서 목록을 반환합니다.
    */
-  createBatch(items: CreateDocumentSourceData[]): number {
+  createBatch(items: CreateDocumentSourceData[]): { id: number, filePath: string }[] {
     const db = getDB()
-    let count = 0
+    const added: { id: number, filePath: string }[] = []
     for (const data of items) {
-      // 이미 같은 경로의 파일이 등록되어 있으면 스킵
       const existing = db.prepare(
         'SELECT id FROM document_sources WHERE project_id = ? AND file_path = ?'
       )
       existing.bind([data.projectId, data.filePath])
       const exists = existing.step()
-      existing.free()
 
       if (!exists) {
+        existing.free()
         db.run(
           `INSERT INTO document_sources 
            (project_id, file_path, file_name, file_type, file_size, content_hash, last_indexed_at) 
@@ -98,11 +97,25 @@ export const documentRepository = {
             data.contentHash ?? null
           ]
         )
-        count++
+        const stmt = db.prepare('SELECT last_insert_rowid() as id')
+        if (stmt.step()) {
+          added.push({ id: stmt.getAsObject().id as number, filePath: data.filePath })
+        }
+        stmt.free()
+      } else {
+        const row = existing.getAsObject()
+        existing.free()
+        db.run(
+          `UPDATE document_sources 
+           SET file_size = ?, updated_at = datetime('now') 
+           WHERE id = ?`,
+          [data.fileSize ?? null, row.id]
+        )
+        added.push({ id: row.id as number, filePath: data.filePath })
       }
     }
     saveDB()
-    return count
+    return added
   },
 
   /**
@@ -124,5 +137,84 @@ export const documentRepository = {
     const deleted = db.getRowsModified()
     saveDB()
     return deleted
+  },
+
+  /**
+   * 여러 청크를 일괄 저장합니다. (FTS 테이블 트리거 자동 동작)
+   */
+  createChunksBatch(documentId: number, chunks: string[]): void {
+    const db = getDB()
+    for (let i = 0; i < chunks.length; i++) {
+      db.run(
+        'INSERT INTO document_chunks (document_id, chunk_index, content) VALUES (?, ?, ?)',
+        [documentId, i, chunks[i]]
+      )
+    }
+    saveDB()
+  },
+
+  /**
+   * 특정 문서의 모든 청크를 삭제합니다. (재색인용)
+   */
+  deleteChunks(documentId: number): void {
+    const db = getDB()
+    db.run('DELETE FROM document_chunks WHERE document_id = ?', [documentId])
+    saveDB()
+  },
+
+  /**
+   * 문서의 내용 해시와 인덱싱 시간을 갱신합니다.
+   */
+  updateContentHash(documentId: number, contentHash: string): void {
+    const db = getDB()
+    db.run(
+      `UPDATE document_sources 
+       SET content_hash = ?, last_indexed_at = datetime('now') 
+       WHERE id = ?`,
+      [contentHash, documentId]
+    )
+    saveDB()
+  },
+
+  /**
+   * FTS5를 사용하여 관련 문서 청크를 검색합니다.
+   */
+  searchChunks(projectId: number, keywords: string[], limit: number = 5): Record<string, unknown>[] {
+    if (keywords.length === 0) return []
+    const db = getDB()
+
+    // FTS5 MATCH 구문: "keyword1" OR "keyword2"
+    const matchQuery = keywords.map(kw => `"${kw.replace(/"/g, '""')}"`).join(' OR ')
+
+    // FTS4 기반 검색 (sql.js 호환)
+    const sql = `
+      SELECT c.id, c.document_id, c.chunk_index, c.content, d.file_name, d.file_path
+      FROM document_chunks_fts fts
+      JOIN document_chunks c ON fts.docid = c.id
+      JOIN document_sources d ON c.document_id = d.id
+      WHERE document_chunks_fts MATCH ? AND d.project_id = ?
+      LIMIT 100
+    `
+    const stmt = db.prepare(sql)
+    stmt.bind([matchQuery, projectId])
+    const rows: Record<string, unknown>[] = []
+    while (stmt.step()) rows.push(stmt.getAsObject())
+    stmt.free()
+
+    // JS 기반 랭킹 (키워드 매칭 수 계산, 점수가 작을수록/음수일수록 우선순위 높음)
+    const lowerKeywords = keywords.map(kw => kw.toLowerCase())
+    for (const row of rows) {
+      const content = (row.content as string).toLowerCase()
+      let score = 0
+      for (const kw of lowerKeywords) {
+        if (content.includes(kw)) score -= 1
+      }
+      row.rank = score
+    }
+
+    // 점수(rank) 오름차순 정렬 (음수이므로 더 많이 포함될수록 앞쪽)
+    rows.sort((a, b) => (a.rank as number) - (b.rank as number))
+
+    return rows.slice(0, limit)
   }
 }

@@ -5,6 +5,7 @@
 
 import { IpcMain, dialog } from 'electron'
 import { documentRepository } from '../database/repositories'
+import { indexDocument } from '../services/documentIndexer'
 import fs from 'fs'
 import path from 'path'
 
@@ -113,7 +114,7 @@ export function registerDocumentHandlers(ipcMain: IpcMain): void {
   // 폴더 스캔 → DB 저장
   ipcMain.handle(
     'documents:scan',
-    (_event, data: { projectId: number; folderPath: string }) => {
+    async (_event, data: { projectId: number; folderPath: string }) => {
       const { projectId, folderPath } = data
 
       if (!fs.existsSync(folderPath)) {
@@ -121,7 +122,7 @@ export function registerDocumentHandlers(ipcMain: IpcMain): void {
       }
 
       const files = scanDirectory(folderPath)
-      const count = documentRepository.createBatch(
+      const addedDocs = documentRepository.createBatch(
         files.map((f) => ({
           projectId,
           filePath: f.filePath,
@@ -131,14 +132,25 @@ export function registerDocumentHandlers(ipcMain: IpcMain): void {
         }))
       )
 
-      return { error: null, count, total: files.length }
+      // 동기적 인덱싱 대기 (사용자 질의 전 청크 보장)
+      await Promise.all(
+        addedDocs.map(async (doc) => {
+          try {
+            await indexDocument(doc.id, doc.filePath)
+          } catch (e) {
+            console.error('인덱싱 실패:', e)
+          }
+        })
+      )
+
+      return { error: null, count: addedDocs.length, total: files.length }
     }
   )
 
   // 선택한 여러 파일 목록을 직접 DB에 저장
   ipcMain.handle(
     'documents:addFiles',
-    (_event, data: { projectId: number; filePaths: string[] }) => {
+    async (_event, data: { projectId: number; filePaths: string[] }) => {
       const { projectId, filePaths } = data
       
       const filesToAdd = []
@@ -159,8 +171,20 @@ export function registerDocumentHandlers(ipcMain: IpcMain): void {
         }
       }
 
-      const count = documentRepository.createBatch(filesToAdd)
-      return { error: null, count, total: filePaths.length }
+      const addedDocs = documentRepository.createBatch(filesToAdd)
+      
+      // 동기적 인덱싱 대기 (사용자 질의 전 청크 보장)
+      await Promise.all(
+        addedDocs.map(async (doc) => {
+          try {
+            await indexDocument(doc.id, doc.filePath)
+          } catch (e) {
+            console.error('인덱싱 실패:', e)
+          }
+        })
+      )
+
+      return { error: null, count: addedDocs.length, total: filePaths.length }
     }
   )
 

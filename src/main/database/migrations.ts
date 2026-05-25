@@ -24,17 +24,43 @@ export interface Migration {
 // 새로운 마이그레이션은 이 배열 끝에 추가하면 됩니다.
 
 export const migrations: Migration[] = [
-  // V001은 초기 스키마이므로 schema.ts에서 직접 생성합니다.
-  // 여기서부터 V002, V003 등 변경 사항을 추가합니다.
-
-  // 예시: 나중에 새 컬럼을 추가하고 싶다면
-  // {
-  //   version: 'V002',
-  //   description: 'projects 테이블에 archive_reason 필드 추가',
-  //   up: (db) => {
-  //     db.run('ALTER TABLE projects ADD COLUMN archive_reason TEXT')
-  //   }
-  // },
+  {
+    version: 'V002',
+    description: '적응형 청킹 파라미터 및 evidence 피드백 테이블 추가',
+    up: (db) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS user_chunking_params (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id TEXT NOT NULL,
+          question_type TEXT NOT NULL,
+          chunk_size INTEGER NOT NULL,
+          overlap INTEGER NOT NULL,
+          top_k INTEGER NOT NULL,
+          max_context_chars INTEGER NOT NULL,
+          feedback_count INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(user_id, question_type)
+        )
+      `)
+      db.run(`
+        CREATE TABLE IF NOT EXISTS evidence_feedback (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id TEXT NOT NULL,
+          query_log_id INTEGER NOT NULL,
+          evidence_log_id INTEGER NOT NULL,
+          feedback TEXT NOT NULL,
+          question_type TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (query_log_id) REFERENCES query_logs(id) ON DELETE CASCADE,
+          FOREIGN KEY (evidence_log_id) REFERENCES evidence_logs(id) ON DELETE CASCADE
+        )
+      `)
+      db.run('CREATE INDEX IF NOT EXISTS idx_user_chunking_params_user ON user_chunking_params(user_id)')
+      db.run('CREATE INDEX IF NOT EXISTS idx_evidence_feedback_user ON evidence_feedback(user_id)')
+      db.run('CREATE INDEX IF NOT EXISTS idx_evidence_feedback_query ON evidence_feedback(query_log_id)')
+    }
+  },
 ]
 
 // ── 마이그레이션 엔진 ────────────────────────────────────────────

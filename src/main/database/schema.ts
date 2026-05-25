@@ -136,6 +136,33 @@ export const SCHEMA_V001 = `
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
   );
+
+  -- 문서 청크 (FTS5 연동용)
+  CREATE TABLE IF NOT EXISTS document_chunks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (document_id) REFERENCES document_sources(id) ON DELETE CASCADE
+  );
+
+  -- 문서 청크 FTS4 가상 테이블 (sql.js 호환)
+  CREATE VIRTUAL TABLE IF NOT EXISTS document_chunks_fts USING fts4(content);
+
+  -- FTS 동기화 트리거
+  CREATE TRIGGER IF NOT EXISTS document_chunks_ai AFTER INSERT ON document_chunks BEGIN
+    INSERT INTO document_chunks_fts(docid, content) VALUES (new.id, new.content);
+  END;
+
+  CREATE TRIGGER IF NOT EXISTS document_chunks_ad AFTER DELETE ON document_chunks BEGIN
+    DELETE FROM document_chunks_fts WHERE docid = old.id;
+  END;
+
+  CREATE TRIGGER IF NOT EXISTS document_chunks_au AFTER UPDATE ON document_chunks BEGIN
+    DELETE FROM document_chunks_fts WHERE docid = old.id;
+    INSERT INTO document_chunks_fts(docid, content) VALUES (new.id, new.content);
+  END;
 `
 
 // ── 인덱스 ──────────────────────────────────────────────────────

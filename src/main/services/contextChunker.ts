@@ -25,22 +25,28 @@ export function estimateTokens(text: string): number {
 
   // 문자 유형별 카운트
   const koreanChars = (text.match(/[\uAC00-\uD7AF\u3130-\u318F\uAC00-\uD7A3]/g) || []).length
+  // [개선 #4] codeIndicators를 실제 토큰 추정에 반영
+  // 코드 기호는 영어보다 토큰을 더 많이 소비 (gpt-4o-mini 실측)
   const codeIndicators = (text.match(/[{}()\[\];=><|&!+\-*/^~`@#$%]/g) || []).length
   const englishChars = (text.match(/[a-zA-Z]/g) || []).length
 
   const koreanRatio = koreanChars / len
+  const codeRatio = codeIndicators / len
   const englishRatio = englishChars / len
-  const symbolRatio = (len - koreanChars - englishChars) / len // 공백, 숫자, 기호 포함
+  // 순수 공백·숫자 비율 (코드 기호 제외)
+  const pureSymbolRatio = Math.max(0, (len - koreanChars - englishChars - codeIndicators) / len)
 
-  // OpenAI gpt-4o-mini 실측 기반 단순 보정식
-  // 한국어는 약 1.7글자당 1토큰, 영어는 약 5글자당 1토큰, 기호/숫자는 약 1.5글자당 1토큰
-  // 이를 역수로 더하여 토큰을 추정합니다.
+  // OpenAI gpt-4o-mini 실측 기반 보정식 (코드 기호 분리 적용)
+  // 한국어: ~1.6글자/토큰, 영어: ~3.5글자/토큰
+  // 코드기호: ~2.5글자/토큰 (특수문자는 별도 토큰으로 인식됨)
+  // 공백·숫자: ~1.2글자/토큰
   const estimatedTokens = len * (
     (koreanRatio / 1.6) +
     (englishRatio / 3.5) +
-    (symbolRatio / 1.2) // 기호와 공백은 토큰을 많이 차지함
+    (codeRatio / 2.5) +
+    (pureSymbolRatio / 1.2)
   )
-  
+
   return Math.ceil(estimatedTokens)
 }
 
@@ -108,27 +114,45 @@ export interface ContextBuildResult {
 export function chunkText(
   text: string,
   chunkSize: number = DEFAULT_CHUNK_SIZE,
-  overlap: number = DEFAULT_OVERLAP
+  overlap: number = DEFAULT_OVERLAP,
+  sourceType?: 'meeting' | 'task' | 'document' | 'git'
 ): string[] {
   if (!text || text.length === 0) return []
   if (text.length <= chunkSize) return [text.trim()]
 
+  // [개선 #5] 소스 타입별 청킹 전략
+  // 회의록: 발언자 단위("이름:") 또는 빈 줄 기준 우선 분리
+  // 태스크: 번호 목록("1.", "- ") 기준 우선 분리
+  // 문서:   마크다운 헤더(##, ###) 기준 우선 분리
+  // git:    커밋 메시지 단위("commit ") 기준 우선 분리
+  if (sourceType === 'meeting') {
+    const speakerChunks = splitBySpeaker(text, chunkSize)
+    if (speakerChunks.length > 1) return speakerChunks
+  }
+  if (sourceType === 'task') {
+    const listChunks = splitByListItem(text, chunkSize)
+    if (listChunks.length > 1) return listChunks
+  }
+  if (sourceType === 'document') {
+    const headerChunks = splitByHeader(text, chunkSize, overlap)
+    if (headerChunks.length > 1) return headerChunks
+  }
+  if (sourceType === 'git') {
+    const commitChunks = splitByCommit(text, chunkSize)
+    if (commitChunks.length > 1) return commitChunks
+  }
+
+  // 기본: 문장 경계 기반 청킹
   const chunks: string[] = []
-  const step = chunkSize - overlap  // 한 번에 전진하는 글자 수
-
-  // overlap이 chunkSize 이상이면 의미 없으므로 보정
+  const step = chunkSize - overlap
   const safeStep = step > 0 ? step : chunkSize
-
   let start = 0
 
   while (start < text.length) {
     let end = Math.min(start + chunkSize, text.length)
 
-    // 텍스트 중간이면 문장 경계(마침표·줄바꿈)에서 자르기 시도
     if (end < text.length) {
       const slice = text.substring(start, end)
-
-      // 뒤에서부터 문장 끝 기호를 찾음
       const lastSentenceEnd = Math.max(
         slice.lastIndexOf('.\n'),
         slice.lastIndexOf('.\r\n'),
@@ -140,23 +164,109 @@ export function chunkText(
         slice.lastIndexOf('음.'),
         slice.lastIndexOf('\n\n')
       )
-
-      // 청크의 50% 이후 지점에서 경계를 찾은 경우에만 적용
       if (lastSentenceEnd > chunkSize * 0.5) {
-        end = start + lastSentenceEnd + 2  // +2: 마침표 + 뒤 문자 포함
+        end = start + lastSentenceEnd + 2
       }
     }
 
     const chunk = text.substring(start, end).trim()
-    if (chunk.length > 0) {
-      chunks.push(chunk)
-    }
+    if (chunk.length > 0) chunks.push(chunk)
 
-    // 다음 청크 시작점: 항상 최소 safeStep 만큼 전진 (무한루프 방지)
     const nextStart = start + safeStep
-    start = Math.max(nextStart, start + 1)  // 최소 1글자는 전진
+    start = Math.max(nextStart, start + 1)
   }
 
+  return chunks
+}
+
+/** 회의록: "이름:" 패턴으로 발언자 단위 분리 */
+function splitBySpeaker(text: string, chunkSize: number): string[] {
+  const lines = text.split('\n')
+  const chunks: string[] = []
+  let current = ''
+
+  for (const line of lines) {
+    const isSpeakerLine = /^[가-힣a-zA-Z]{1,10}\s*:/.test(line.trim())
+    if (isSpeakerLine && current.trim().length > 0) {
+      if (current.length > chunkSize) {
+        // 청크가 너무 길면 추가 분리
+        chunks.push(...splitByNewline(current, chunkSize))
+      } else {
+        chunks.push(current.trim())
+      }
+      current = ''
+    }
+    current += line + '\n'
+  }
+  if (current.trim().length > 0) chunks.push(current.trim())
+  return chunks
+}
+
+/** 태스크: "1.", "- ", "* " 등 목록 항목 단위 분리 */
+function splitByListItem(text: string, chunkSize: number): string[] {
+  const lines = text.split('\n')
+  const chunks: string[] = []
+  let current = ''
+
+  for (const line of lines) {
+    const isListItem = /^(\d+\.|-|\*|•)\s/.test(line.trim())
+    if (isListItem && current.trim().length > 0) {
+      chunks.push(current.trim())
+      current = ''
+    }
+    current += line + '\n'
+    if (current.length > chunkSize) {
+      chunks.push(current.trim())
+      current = ''
+    }
+  }
+  if (current.trim().length > 0) chunks.push(current.trim())
+  return chunks
+}
+
+/** 문서: 마크다운 헤더(#, ##, ###) 기준 분리 후 chunkSize 초과 시 재분리 */
+function splitByHeader(text: string, chunkSize: number, overlap: number): string[] {
+  const sections = text.split(/(?=\n#{1,3}\s)/)
+  const chunks: string[] = []
+  for (const section of sections) {
+    if (section.trim().length === 0) continue
+    if (section.length <= chunkSize) {
+      chunks.push(section.trim())
+    } else {
+      // 섹션이 너무 크면 일반 청킹으로 재분리
+      chunks.push(...chunkText(section, chunkSize, overlap))
+    }
+  }
+  return chunks
+}
+
+/** Git: "commit " 해시 단위 분리 */
+function splitByCommit(text: string, chunkSize: number): string[] {
+  const sections = text.split(/(?=commit\s[0-9a-f]{7,40})/i)
+  const chunks: string[] = []
+  for (const section of sections) {
+    if (section.trim().length === 0) continue
+    if (section.length <= chunkSize) {
+      chunks.push(section.trim())
+    } else {
+      chunks.push(...splitByNewline(section, chunkSize))
+    }
+  }
+  return chunks
+}
+
+/** 줄바꿈 기준 단순 분리 (내부 헬퍼) */
+function splitByNewline(text: string, chunkSize: number): string[] {
+  const chunks: string[] = []
+  let current = ''
+  for (const line of text.split('\n')) {
+    if (current.length + line.length > chunkSize && current.trim().length > 0) {
+      chunks.push(current.trim())
+      current = ''
+    }
+    current += line + '\n'
+  }
+  if (current.trim().length > 0) chunks.push(current.trim())
   return chunks
 }
 
@@ -179,11 +289,15 @@ export function truncate(text: string, maxChars: number): string {
     truncated.lastIndexOf('.\n')
   )
 
+  // [개선 #6] 잘린 글자 수를 힌트로 포함 → LLM이 내용이 잘렸음을 명확히 인식
+  const omittedChars = text.length - maxChars
+  const hint = `\n...[이하 ${omittedChars}자 생략됨. 내용이 잘렸을 수 있음]`
+
   if (lastPeriod > maxChars * 0.7) {
-    return truncated.substring(0, lastPeriod + 1) + '\n...(이하 생략)'
+    return truncated.substring(0, lastPeriod + 1) + hint
   }
 
-  return truncated + '...(이하 생략)'
+  return truncated + hint
 }
 
 // ── 핵심 함수: 청크 스코어링 ─────────────────────────────────────
@@ -199,6 +313,7 @@ export function truncate(text: string, maxChars: number): string {
 export function scoreChunk(chunk: Chunk, keywords: string[]): number {
   let score = 0
   const textLower = chunk.text.toLowerCase()
+  const titleLower = chunk.sourceTitle.toLowerCase()
 
   for (const keyword of keywords) {
     const kwLower = keyword.toLowerCase()
@@ -212,11 +327,21 @@ export function scoreChunk(chunk: Chunk, keywords: string[]): number {
       if (matches && matches.length > 1) {
         score += Math.min(matches.length - 1, 3) * 0.3
       }
+
+      // [개선 #3] 키워드가 청크 앞부분(20% 이내)에 등장하면 위치 보너스
+      const position = textLower.indexOf(kwLower) / Math.max(chunk.text.length, 1)
+      if (position < 0.2) score += 0.5
+    }
+
+    // [개선 #3] 소스 제목에 키워드가 포함되면 추가 보너스
+    // 제목 매칭은 강한 관련성 신호이므로 본문 매칭보다 높은 가중치 부여
+    if (titleLower.includes(kwLower)) {
+      score += 0.8
     }
   }
 
-  // 첫 번째 청크 보너스 (보통 제목·요약이 포함됨)
-  if (chunk.chunkIndex === 0) {
+  // 첫 번째 청크 보너스 (보통 제목·요약이 포함됨) - 단, 키워드 매칭이 성공한 경우에만 부여
+  if (chunk.chunkIndex === 0 && score > 0) {
     score += 1
   }
 
@@ -261,7 +386,8 @@ export function buildContext(
   const allChunks: Chunk[] = []
 
   for (const source of sources) {
-    const textChunks = chunkText(source.content, chunkSize, overlap)
+    // [개선 #5] 소스 타입을 chunkText에 전달해 타입별 최적 청킹 전략 사용
+    const textChunks = chunkText(source.content, chunkSize, overlap, source.type)
 
     for (let i = 0; i < textChunks.length; i++) {
       const chunk: Chunk = {
@@ -287,7 +413,9 @@ export function buildContext(
 
   for (const chunk of allChunks) {
     if (selected.length >= topK) break
-    if (chunk.score <= 0) break // 매칭 없는 청크 제외
+    // [개선 #1] break → continue: score=0인 청크가 있어도 이후 청크를 포기하지 않음
+    // 정렬 후 score=0인 청크는 맨 뒤에 몰려있으므로 continue해도 성능 영향 없음
+    if (chunk.score <= 0) continue
     if (totalChars + chunk.text.length > maxContextChars) {
       // 남은 공간에 트런케이션해서 넣을 수 있으면 넣기
       const remaining = maxContextChars - totalChars
@@ -306,12 +434,12 @@ export function buildContext(
   // Step 4: 최종 컨텍스트 블록 포맷팅
   const contextBlock = selected
     .map((c, i) => {
+      // [개선 #2] git 타입 라벨 추가
       const typeLabel =
-        c.sourceType === 'meeting'
-          ? '회의록'
-          : c.sourceType === 'task'
-            ? '태스크'
-            : '문서'
+        c.sourceType === 'meeting' ? '회의록' :
+        c.sourceType === 'task'    ? '태스크' :
+        c.sourceType === 'git'     ? 'Git커밋' :
+        '문서'
       return `[${i + 1}] (${typeLabel}) ${c.sourceTitle}\n${c.text}`
     })
     .join('\n---\n')

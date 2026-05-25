@@ -134,7 +134,7 @@ export function buildPrompt(input: PromptBuildInput): PromptBuildResult {
   if (contextResult.selectedChunks.length > 0) {
     userMessage = `## 참고 자료\n${contextResult.contextBlock}\n\n## 질문\n${cleanedQuery}`
   } else {
-    userMessage = `## 질문\n${cleanedQuery}\n\n(관련 참고 자료가 없습니다. 일반 지식으로 답변해주세요.)`
+    userMessage = `## 참고 자료\n(관련 참고 자료가 없습니다.)\n\n## 질문\n${cleanedQuery}`
   }
 
   const finalPrompt = `${systemPrompt}\n\n${userMessage}`

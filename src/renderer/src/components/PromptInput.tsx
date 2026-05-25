@@ -1,5 +1,5 @@
 import { Send, Loader2 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const examplePrompts = [
   '현재 프로젝트의 진행상황 알려줘',
@@ -14,7 +14,11 @@ interface PromptInputProps {
 }
 
 export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps) {
-  const [prompt, setPrompt] = useState('')
+  const [prompt, setPrompt] = useState(() => localStorage.getItem('dashboardPrompt') || '')
+
+  useEffect(() => {
+    localStorage.setItem('dashboardPrompt', prompt)
+  }, [prompt])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()

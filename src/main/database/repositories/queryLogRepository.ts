@@ -133,22 +133,27 @@ export const aiLogRepository = {
 
 export const evidenceLogRepository = {
   /**
-   * Evidence 로그를 생성합니다.
+   * Evidence 로그를 생성하고 생성된 ID를 반환합니다.
    */
-  create(data: CreateEvidenceLogData): void {
+  create(data: CreateEvidenceLogData): number {
     const db = getDB()
-    db.run(
-      'INSERT INTO evidence_logs (query_log_id, source, title, content, score, metadata) VALUES (?, ?, ?, ?, ?, ?)',
-      [
-        data.queryLogId,
-        data.source,
-        data.title,
-        data.content,
-        data.score ?? null,
-        data.metadata ?? null
-      ]
+    const stmt = db.prepare(
+      'INSERT INTO evidence_logs (query_log_id, source, title, content, score, metadata) VALUES (?, ?, ?, ?, ?, ?)'
     )
+    stmt.run([
+      data.queryLogId,
+      data.source,
+      data.title,
+      data.content,
+      data.score ?? null,
+      data.metadata ?? null
+    ])
+    const stmt2 = db.prepare('SELECT last_insert_rowid() as id')
+    stmt2.step()
+    const result = stmt2.getAsObject() as { id: number }
+    stmt2.free()
     saveDB()
+    return result.id
   },
 
   /**

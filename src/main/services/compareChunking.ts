@@ -65,7 +65,7 @@ async function main() {
   console.log('\n[진행 중] 시나리오 1: 청킹 미적용 (모든 문서 전체 주입)...')
   
   const rawContextStr = SAMPLE_SOURCES.map(s => `[${s.title}]\n${s.content}`).join('\n\n')
-  const rawMessages = [
+  const rawMessages: import('./llmService').LLMMessage[] = [
     { role: 'system', content: `당신은 AI 어시스턴트입니다. 다음 주어진 자료만을 참고해 답변하세요.\n\n---\n${rawContextStr}\n---` },
     { role: 'user', content: TEST_QUESTION }
   ]
