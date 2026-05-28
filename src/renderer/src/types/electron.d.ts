@@ -61,17 +61,23 @@ declare global {
       getDocuments: (projectId: number) => Promise<Record<string, unknown>[]>
       deleteDocument: (id: number) => Promise<boolean>
       deleteAllDocuments: (projectId: number) => Promise<number>
-      readDocumentContent: (filePath: string) => Promise<{
-        error: string | null
-        content: string | null
-        binary?: boolean
-        info?: string
-      }>
+      readDocumentContent: (filePath: string) => Promise<{ data: string | null; error: string | null }>
+      selectDocumentFiles: () => Promise<{ filePaths: string[] | null }>
+      addDocumentFiles: (data: { projectId: number; filePaths: string[] }) => Promise<{ error: string | null; count: number }>
 
       // 질의
-      query: (request: { projectId: number; sources: DataSource[]; tool: ToolType; prompt: string }) => Promise<QueryResponse>
+      query: (request: { projectId: number; sources: string[]; tool: string; prompt: string }) => Promise<{
+        queryLogId?: number; summary: string; evidence: any[]; suggestedActions: string[]; rawResponse?: string
+      }>
       getQueryHistory: (projectId: number, limit?: number) => Promise<Record<string, unknown>[]>
       getQueryById: (id: number) => Promise<Record<string, unknown> | null>
+      submitEvidenceFeedback: (data: {
+        userId: string; queryLogId: number; evidenceLogId: number; feedback: 'interested' | 'not_interested'; questionType: string
+      }) => Promise<{ success: boolean }>
+      submitAllEvidenceFeedback: (data: {
+        userId: string; queryLogId: number; questionType: string; feedbacks: { evidenceLogId: number; feedback: 'interested' | 'not_interested' }[]; totalEvidenceCount: number
+      }) => Promise<{ success: boolean; updatedParams: any }>
+      getAdaptiveParams: (userId: string) => Promise<Record<string, unknown>[]>
 
       // 설정
       getLLMSettings: () => Promise<{

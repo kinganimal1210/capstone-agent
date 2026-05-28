@@ -1,209 +1,283 @@
-import https from 'https'
-import { URL } from 'url'
-import type { EvidenceItem, ToolType } from '../../shared/types'
-import { getResolvedLLMSettings } from './settingsService'
+/**
+ * LLM 서비스 모듈
+ *
+ * OpenAI, Anthropic (Claude), Google Gemini API를 통합하여
+ * 기존 promptBuilder의 출력을 실제 LLM에 전송합니다.
+ *
+ * 설치 필요 패키지:
+ *   npm install openai @anthropic-ai/sdk @google/generative-ai dotenv
+ */
 
-interface GenerateProjectAnalysisInput {
-  projectName: string
-  tool: ToolType
-  prompt: string
-  evidence: EvidenceItem[]
+// ── 타입 정의 ────────────────────────────────────────────────────
+
+export type LLMProvider = 'openai' | 'claude' | 'gemini'
+
+export interface LLMConfig {
+  provider: LLMProvider
+  apiKey: string
+  /** 사용할 모델 (기본값은 provider별 자동 선택) */
+  model?: string
+  /** 최대 출력 토큰 수 */
+  maxTokens?: number
+  /** 응답 온도 (창의성) */
+  temperature?: number
 }
 
-interface OpenAIResponseUsage {
-  total_tokens?: number
+export interface LLMMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
 }
 
-interface OpenAIResponseText {
-  type?: string
-  text?: string
-}
-
-interface OpenAIResponseOutputItem {
-  content?: OpenAIResponseText[]
-}
-
-interface OpenAIResponsesApiResponse {
-  output_text?: string
-  output?: OpenAIResponseOutputItem[]
-  usage?: OpenAIResponseUsage
-  error?: {
-    message?: string
-  }
-}
-
-export interface GeneratedProjectAnalysis {
-  summary: string
-  suggestedActions: string[]
-  rawResponse: string
+export interface LLMResponse {
+  /** LLM 응답 텍스트 */
+  content: string
+  /** 사용한 provider */
+  provider: LLMProvider
+  /** 사용한 모델 */
   model: string
-  tokenUsed?: number
+  /** 토큰 사용량 (API에서 제공하는 경우) */
+  usage?: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+  }
+  /** 응답 소요 시간 (ms) */
+  latencyMs: number
 }
 
-function postJson<T>(urlString: string, apiKey: string, body: Record<string, unknown>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const url = new URL(urlString)
-    const payload = JSON.stringify(body)
+// ── 기본 모델 설정 ───────────────────────────────────────────────
 
-    const req = https.request(
-      {
-        method: 'POST',
-        hostname: url.hostname,
-        path: `${url.pathname}${url.search}`,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Length': Buffer.byteLength(payload)
-        }
-      },
-      (res) => {
-        let data = ''
+const DEFAULT_MODELS: Record<LLMProvider, string> = {
+  openai: 'gpt-4o-mini',
+  claude: 'claude-sonnet-4-20250514',
+  gemini: 'gemini-2.0-flash',
+}
 
-        res.setEncoding('utf8')
-        res.on('data', (chunk) => {
-          data += chunk
-        })
+const DEFAULT_MAX_TOKENS = 1024
+const DEFAULT_TEMPERATURE = 0.3
 
-        res.on('end', () => {
-          try {
-            const parsed = JSON.parse(data) as T & { error?: { message?: string } }
-            if (res.statusCode && res.statusCode >= 400) {
-              reject(new Error(parsed.error?.message || `LLM API 요청 실패 (${res.statusCode})`))
-              return
-            }
-            resolve(parsed)
-          } catch {
-            reject(new Error('LLM API 응답을 JSON으로 해석하지 못했습니다.'))
-          }
-        })
-      }
-    )
+// ── OpenAI API 호출 ──────────────────────────────────────────────
 
-    req.on('error', (error) => {
-      reject(error)
-    })
+async function callOpenAI(
+  messages: LLMMessage[],
+  config: LLMConfig
+): Promise<LLMResponse> {
+  const { default: OpenAI } = await import('openai')
 
-    req.setTimeout(30000, () => {
-      req.destroy(new Error('LLM API 요청 시간이 초과되었습니다.'))
-    })
+  const client = new OpenAI({ apiKey: config.apiKey })
+  const model = config.model ?? DEFAULT_MODELS.openai
 
-    req.write(payload)
-    req.end()
+  const startTime = Date.now()
+
+  const response = await client.chat.completions.create({
+    model,
+    messages: messages.map((m) => ({
+      role: m.role as 'system' | 'user' | 'assistant',
+      content: m.content,
+    })),
+    max_tokens: config.maxTokens ?? DEFAULT_MAX_TOKENS,
+    temperature: config.temperature ?? DEFAULT_TEMPERATURE,
   })
-}
 
-function buildEvidenceContext(evidence: EvidenceItem[]): string {
-  if (evidence.length === 0) {
-    return '선택된 데이터 소스에서 아직 근거 데이터가 없습니다.'
-  }
-
-  return evidence
-    .map((item, index) => {
-      const dateLine = item.date ? `날짜: ${item.date}\n` : ''
-      return [
-        `[Evidence ${index + 1}]`,
-        `ID: ${item.id}`,
-        `Source: ${item.source}`,
-        `Title: ${item.title}`,
-        dateLine ? dateLine.trimEnd() : null,
-        `Content: ${item.content}`
-      ]
-        .filter(Boolean)
-        .join('\n')
-    })
-    .join('\n\n')
-}
-
-function extractOutputText(response: OpenAIResponsesApiResponse): string {
-  if (response.output_text && response.output_text.trim()) {
-    return response.output_text.trim()
-  }
-
-  const parts: string[] = []
-  for (const item of response.output ?? []) {
-    for (const content of item.content ?? []) {
-      if (typeof content.text === 'string' && content.text.trim()) {
-        parts.push(content.text.trim())
-      }
-    }
-  }
-
-  return parts.join('\n').trim()
-}
-
-function safeJsonParse(rawText: string): { summary?: string; suggestedActions?: string[] } | null {
-  try {
-    return JSON.parse(rawText) as { summary?: string; suggestedActions?: string[] }
-  } catch {
-    const match = rawText.match(/\{[\s\S]*\}/)
-    if (!match) return null
-
-    try {
-      return JSON.parse(match[0]) as { summary?: string; suggestedActions?: string[] }
-    } catch {
-      return null
-    }
-  }
-}
-
-export async function generateProjectAnalysis(input: GenerateProjectAnalysisInput): Promise<GeneratedProjectAnalysis> {
-  const settings = getResolvedLLMSettings()
-
-  if (!settings.apiKey) {
-    throw new Error('LLM API 키가 설정되지 않았습니다. Settings에서 API Key를 저장하세요.')
-  }
-
-  if (settings.provider !== 'openai') {
-    throw new Error(`지원하지 않는 LLM provider입니다: ${settings.provider}`)
-  }
-
-  const instructions = [
-    'You analyze software project progress using provided evidence only.',
-    'Return valid JSON only.',
-    'Schema: {"summary":"string","suggestedActions":["string","string"]}',
-    'Write the response in Korean.',
-    'Do not invent evidence that is not present in the context.'
-  ].join(' ')
-
-  const requestInput = [
-    `프로젝트명: ${input.projectName}`,
-    `선택 도구: ${input.tool}`,
-    `사용자 질문: ${input.prompt}`,
-    '',
-    '[근거 데이터]',
-    buildEvidenceContext(input.evidence)
-  ].join('\n')
-
-  const response = await postJson<OpenAIResponsesApiResponse>(
-    `${settings.baseUrl}/responses`,
-    settings.apiKey,
-    {
-      model: settings.model,
-      instructions,
-      input: requestInput
-    }
-  )
-
-  if (response.error?.message) {
-    throw new Error(response.error.message)
-  }
-
-  const outputText = extractOutputText(response)
-  if (!outputText) {
-    throw new Error('LLM이 비어 있는 응답을 반환했습니다.')
-  }
-
-  const parsed = safeJsonParse(outputText)
-  const summary = parsed?.summary?.trim() || outputText
-  const suggestedActions = Array.isArray(parsed?.suggestedActions)
-    ? parsed!.suggestedActions.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-    : []
+  const latencyMs = Date.now() - startTime
 
   return {
-    summary,
-    suggestedActions,
-    rawResponse: outputText,
-    model: settings.model,
-    tokenUsed: response.usage?.total_tokens
+    content: response.choices[0]?.message?.content ?? '',
+    provider: 'openai',
+    model,
+    usage: response.usage
+      ? {
+          promptTokens: response.usage.prompt_tokens,
+          completionTokens: response.usage.completion_tokens,
+          totalTokens: response.usage.total_tokens,
+        }
+      : undefined,
+    latencyMs,
+  }
+}
+
+// ── Anthropic Claude API 호출 ────────────────────────────────────
+
+async function callClaude(
+  messages: LLMMessage[],
+  config: LLMConfig
+): Promise<LLMResponse> {
+  const { default: Anthropic } = await import('@anthropic-ai/sdk')
+
+  const client = new Anthropic({ apiKey: config.apiKey })
+  const model = config.model ?? DEFAULT_MODELS.claude
+
+  // Claude는 system 메시지를 별도 파라미터로 전달
+  const systemMessage = messages.find((m) => m.role === 'system')?.content ?? ''
+  const chatMessages = messages
+    .filter((m) => m.role !== 'system')
+    .map((m) => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+    }))
+
+  const startTime = Date.now()
+
+  const response = await client.messages.create({
+    model,
+    max_tokens: config.maxTokens ?? DEFAULT_MAX_TOKENS,
+    temperature: config.temperature ?? DEFAULT_TEMPERATURE,
+    system: systemMessage,
+    messages: chatMessages,
+  })
+
+  const latencyMs = Date.now() - startTime
+
+  // Claude 응답에서 텍스트 추출
+  const content = response.content
+    .filter((block) => block.type === 'text')
+    .map((block: any) => block.text)
+    .join('')
+
+  return {
+    content,
+    provider: 'claude',
+    model,
+    usage: {
+      promptTokens: response.usage.input_tokens,
+      completionTokens: response.usage.output_tokens,
+      totalTokens: response.usage.input_tokens + response.usage.output_tokens,
+    },
+    latencyMs,
+  }
+}
+
+// ── Google Gemini API 호출 ───────────────────────────────────────
+
+async function callGemini(
+  messages: LLMMessage[],
+  config: LLMConfig
+): Promise<LLMResponse> {
+  const { GoogleGenerativeAI } = await import('@google/generative-ai')
+
+  const genAI = new GoogleGenerativeAI(config.apiKey)
+  const model = config.model ?? DEFAULT_MODELS.gemini
+
+  // Gemini는 system instruction + 대화 히스토리 형태
+  const systemMessage = messages.find((m) => m.role === 'system')?.content ?? ''
+  const chatMessages = messages.filter((m) => m.role !== 'system')
+
+  const generativeModel = genAI.getGenerativeModel({
+    model,
+    systemInstruction: systemMessage,
+    generationConfig: {
+      maxOutputTokens: config.maxTokens ?? DEFAULT_MAX_TOKENS,
+      temperature: config.temperature ?? DEFAULT_TEMPERATURE,
+    },
+  })
+
+  // Gemini 대화 히스토리 포맷 변환
+  const history = chatMessages.slice(0, -1).map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }))
+
+  const lastMessage = chatMessages[chatMessages.length - 1]
+
+  const startTime = Date.now()
+
+  const chat = generativeModel.startChat({ history })
+  const result = await chat.sendMessage(lastMessage?.content ?? '')
+  const response = result.response
+
+  const latencyMs = Date.now() - startTime
+
+  const usageMetadata = response.usageMetadata
+
+  return {
+    content: response.text(),
+    provider: 'gemini',
+    model,
+    usage: usageMetadata
+      ? {
+          promptTokens: usageMetadata.promptTokenCount ?? 0,
+          completionTokens: usageMetadata.candidatesTokenCount ?? 0,
+          totalTokens: usageMetadata.totalTokenCount ?? 0,
+        }
+      : undefined,
+    latencyMs,
+  }
+}
+
+// ── 통합 호출 함수 ───────────────────────────────────────────────
+
+/**
+ * LLM API를 호출합니다.
+ *
+ * @param messages  대화 메시지 배열 (system, user, assistant)
+ * @param config    LLM 설정 (provider, apiKey, model 등)
+ *
+ * @example
+ * const response = await callLLM(
+ *   [
+ *     { role: 'system', content: '프로젝트 관리 AI' },
+ *     { role: 'user', content: '태스크 현황 알려줘' },
+ *   ],
+ *   { provider: 'openai', apiKey: 'sk-...' }
+ * )
+ */
+export async function callLLM(
+  messages: LLMMessage[],
+  config: LLMConfig
+): Promise<LLMResponse> {
+  switch (config.provider) {
+    case 'openai':
+      return callOpenAI(messages, config)
+    case 'claude':
+      return callClaude(messages, config)
+    case 'gemini':
+      return callGemini(messages, config)
+    default:
+      throw new Error(`지원하지 않는 LLM provider: ${config.provider}`)
+  }
+}
+
+// ── 유틸리티: 환경변수에서 설정 로드 ─────────────────────────────
+
+/**
+ * 환경변수에서 LLM 설정을 로드합니다.
+ *
+ * 환경변수 규칙:
+ *   OPENAI_API_KEY, CLAUDE_API_KEY (또는 ANTHROPIC_API_KEY), GEMINI_API_KEY (또는 GOOGLE_API_KEY)
+ *   LLM_MODEL (선택)
+ *   LLM_MAX_TOKENS (선택)
+ *   LLM_TEMPERATURE (선택)
+ */
+export function loadConfigFromEnv(provider: LLMProvider): LLMConfig {
+  let apiKey: string | undefined
+
+  switch (provider) {
+    case 'openai':
+      apiKey = process.env.OPENAI_API_KEY
+      break
+    case 'claude':
+      apiKey = process.env.CLAUDE_API_KEY ?? process.env.ANTHROPIC_API_KEY
+      break
+    case 'gemini':
+      apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY
+      break
+  }
+
+  if (!apiKey) {
+    throw new Error(
+      `API 키가 설정되지 않았습니다. .env 파일에 ${provider.toUpperCase()}_API_KEY를 설정해주세요.`
+    )
+  }
+
+  return {
+    provider,
+    apiKey,
+    model: process.env.LLM_MODEL,
+    maxTokens: process.env.LLM_MAX_TOKENS
+      ? parseInt(process.env.LLM_MAX_TOKENS, 10)
+      : undefined,
+    temperature: process.env.LLM_TEMPERATURE
+      ? parseFloat(process.env.LLM_TEMPERATURE)
+      : undefined,
   }
 }

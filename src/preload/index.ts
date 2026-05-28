@@ -75,6 +75,9 @@ contextBridge.exposeInMainWorld('api', {
   getQueryHistory: (projectId: number, limit?: number) =>
     ipcRenderer.invoke('query:getHistory', projectId, limit),
   getQueryById: (id: number) => ipcRenderer.invoke('query:getById', id),
+  submitEvidenceFeedback: (data: any) => ipcRenderer.invoke('evidence:feedback', data),
+  submitAllEvidenceFeedback: (data: any) => ipcRenderer.invoke('evidence:submitAll', data),
+  getAdaptiveParams: (userId: string) => ipcRenderer.invoke('adaptive:getParams', userId),
 
   // ── 설정 ───────────────────────────────────────────────────
   getLLMSettings: () => ipcRenderer.invoke('settings:getLLM'),
