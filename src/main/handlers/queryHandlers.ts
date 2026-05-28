@@ -15,6 +15,27 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
 export function registerQueryHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('query:run', async (_event, request: QueryRequest): Promise<QueryResponse> => {
     const startTime = Date.now()
+    const project = projectRepository.getById(request.projectId)
+    const projectGitPath = typeof project?.git_path === 'string' ? project.git_path : ''
+
+    if (!request.prompt.trim()) {
+      throw new Error('질문을 입력하세요.')
+    }
+
+    const requiredSources = toolRequiredSources[request.tool] ?? []
+    const missingSources = requiredSources.filter((source) => !request.sources.includes(source))
+    if (missingSources.length > 0) {
+      throw new Error(`선택한 도구에 필요한 데이터 소스가 부족합니다: ${missingSources.join(', ')}`)
+    }
+
+    if (request.sources.includes('git')) {
+      if (!projectGitPath) {
+        throw new Error('Git 데이터 소스를 사용하려면 Settings에서 기본 Git 저장소 경로를 먼저 저장하세요.')
+      }
+      if (!isValidGitRepo(projectGitPath)) {
+        throw new Error('저장된 Git 경로가 유효한 저장소가 아닙니다. Settings에서 경로를 다시 확인하세요.')
+      }
+    }
 
     // query_log 저장
     const queryLogId = queryLogRepository.create({

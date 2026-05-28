@@ -79,7 +79,7 @@ export function ResultDisplay({ summary, evidence, suggestedActions, feedbacks =
                 )}
                 {!onFeedbackChange && <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
               </div>
-              <p className="text-xs text-muted-foreground">{item.snippet}</p>
+              <p className="text-xs text-muted-foreground">{item.snippet ?? item.content ?? ''}</p>
             </div>
           ))}
         </div>
@@ -99,15 +99,24 @@ export function ResultDisplay({ summary, evidence, suggestedActions, feedbacks =
         <div className="space-y-2">
           {suggestedActions.map((action, i) => (
             <div key={i} className="p-4 bg-background border border-border rounded-lg hover:border-primary/30 transition-colors">
-              <div className="flex items-start gap-3">
-                <div className={`w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0 ${
-                  action.priority === 'high' ? 'bg-destructive' : action.priority === 'medium' ? 'bg-chart-4' : 'bg-muted-foreground'
-                }`} />
-                <div className="flex-1">
-                  <h4 className="text-sm text-foreground mb-1">{action.title}</h4>
-                  <p className="text-xs text-muted-foreground">{action.description}</p>
+              {typeof action === 'string' ? (
+                <div className="flex items-start gap-3">
+                  <div className="w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0 bg-chart-4" />
+                  <div className="flex-1">
+                    <h4 className="text-sm text-foreground">{action}</h4>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-start gap-3">
+                  <div className={`w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0 ${
+                    action.priority === 'high' ? 'bg-destructive' : action.priority === 'medium' ? 'bg-chart-4' : 'bg-muted-foreground'
+                  }`} />
+                  <div className="flex-1">
+                    <h4 className="text-sm text-foreground mb-1">{action.title}</h4>
+                    <p className="text-xs text-muted-foreground">{action.description}</p>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

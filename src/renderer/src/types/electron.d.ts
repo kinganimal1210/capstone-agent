@@ -3,6 +3,8 @@
  * preload에서 노출한 API 메서드의 타입을 정의합니다.
  */
 
+import type { DataSource, EvidenceItem, QueryResponse, ToolType } from '../../../shared/types'
+
 export {}
 
 declare global {
@@ -53,7 +55,9 @@ declare global {
 
       // 문서
       selectDocumentFolder: () => Promise<{ path: string | null }>
+      selectDocumentFiles: () => Promise<{ filePaths: string[] }>
       scanDocuments: (data: { projectId: number; folderPath: string }) => Promise<{ error: string | null; count: number; total?: number }>
+      addDocumentFiles: (data: { projectId: number; filePaths: string[] }) => Promise<{ error: string | null; count: number; total?: number }>
       getDocuments: (projectId: number) => Promise<Record<string, unknown>[]>
       deleteDocument: (id: number) => Promise<boolean>
       deleteAllDocuments: (projectId: number) => Promise<number>
@@ -75,10 +79,31 @@ declare global {
       }) => Promise<{ success: boolean; updatedParams: any }>
       getAdaptiveParams: (userId: string) => Promise<Record<string, unknown>[]>
 
+      // 설정
+      getLLMSettings: () => Promise<{
+        provider: 'openai'
+        model: string
+        baseUrl: string
+        hasApiKey: boolean
+      }>
+      updateLLMSettings: (data: {
+        provider?: 'openai'
+        model?: string
+        apiKey?: string
+        baseUrl?: string
+      }) => Promise<{
+        provider: 'openai'
+        model: string
+        baseUrl: string
+        hasApiKey: boolean
+      }>
+
       // Git
       validateGitRepo: (path: string) => Promise<{ valid: boolean; error: string | null }>
       getGitRepoInfo: (path: string) => Promise<{ data: { path: string; currentBranch: string; totalCommits: number; lastCommitDate: string; remoteUrl?: string } | null; error: string | null }>
-      getGitCommits: (path: string, count?: number) => Promise<{ data: { hash: string; shortHash: string; message: string; author: string; date: string; changedFiles?: { path: string; status: string; additions: number; deletions: number }[] }[]; error: string | null }>
+      getGitBranches: (path: string) => Promise<{ data: { name: string; ref: string; isCurrent: boolean; scope: 'local' | 'remote' }[]; error: string | null }>
+      getGitBranchRepoInfo: (path: string, ref: string) => Promise<{ data: { path: string; currentBranch: string; totalCommits: number; lastCommitDate: string; remoteUrl?: string } | null; error: string | null }>
+      getGitCommits: (path: string, count?: number, ref?: string) => Promise<{ data: { hash: string; shortHash: string; message: string; author: string; date: string; changedFiles?: { path: string; status: string; additions: number; deletions: number }[] }[]; error: string | null }>
       getGitCommitDetail: (path: string, hash: string) => Promise<{ data: { hash: string; shortHash: string; message: string; author: string; date: string; changedFiles?: { path: string; status: string; additions: number; deletions: number }[] } | null; error: string | null }>
       selectGitFolder: () => Promise<{ path: string | null; valid?: boolean }>
 

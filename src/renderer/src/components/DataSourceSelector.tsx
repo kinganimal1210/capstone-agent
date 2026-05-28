@@ -1,19 +1,25 @@
 import { GitBranch, MessageSquare, CheckSquare, FileText } from 'lucide-react'
+import type { DataSource } from '../../../shared/types'
 
 const dataSources = [
   { id: 'git', name: 'Git Repository', icon: GitBranch, description: 'Commits, branches, and code changes' },
   { id: 'meetings', name: 'Meeting Notes', icon: MessageSquare, description: 'Discussion records and decisions' },
   { id: 'tasks', name: 'Tasks', icon: CheckSquare, description: 'Project tasks and milestones' },
   { id: 'documents', name: 'Local Documents', icon: FileText, description: 'Design docs, README, reports' },
-]
+] as const satisfies ReadonlyArray<{
+  id: DataSource
+  name: string
+  icon: typeof GitBranch
+  description: string
+}>
 
 interface DataSourceSelectorProps {
-  selectedSources: string[]
-  onSourcesChange: (sources: string[]) => void
+  selectedSources: DataSource[]
+  onSourcesChange: (sources: DataSource[]) => void
 }
 
 export function DataSourceSelector({ selectedSources, onSourcesChange }: DataSourceSelectorProps) {
-  const toggle = (id: string) => {
+  const toggle = (id: DataSource) => {
     if (selectedSources.includes(id)) {
       onSourcesChange(selectedSources.filter((s) => s !== id))
     } else {

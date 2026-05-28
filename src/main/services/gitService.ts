@@ -3,6 +3,13 @@ import fs from 'fs'
 import path from 'path'
 import type { GitCommit, GitChangedFile, GitRepoInfo } from '../../shared/types'
 
+export interface GitBranchRef {
+  name: string
+  ref: string
+  isCurrent: boolean
+  scope: 'local' | 'remote'
+}
+
 /**
  * Git CLI를 child_process로 호출하여 저장소 데이터를 추출하는 서비스
  */
@@ -57,14 +64,93 @@ export function getRepoInfo(repoPath: string): GitRepoInfo {
   }
 }
 
+function escapeGitRef(ref: string): string {
+  return ref.replace(/"/g, '\\"')
+}
+
+export function getBranchRefs(repoPath: string): GitBranchRef[] {
+  const output = execGit(
+    repoPath,
+    'for-each-ref --format="%(refname:short)|%(HEAD)|%(refname)" refs/heads refs/remotes'
+  )
+
+  if (!output) return []
+
+  const refs = output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [shortName, headMark, fullRef] = line.split('|')
+      const scope: GitBranchRef['scope'] = fullRef.startsWith('refs/remotes/') ? 'remote' : 'local'
+      const displayName = scope === 'remote' && shortName.startsWith('origin/')
+        ? shortName.slice('origin/'.length)
+        : shortName
+      return {
+        name: displayName,
+        ref: shortName,
+        isCurrent: headMark === '*',
+        scope
+      }
+    })
+    .filter((ref) => ref.name !== 'origin')
+    .filter((ref) => !ref.ref.endsWith('/HEAD'))
+
+  const branchMap = new Map<string, GitBranchRef>()
+  for (const ref of refs) {
+    const existing = branchMap.get(ref.name)
+    if (!existing) {
+      branchMap.set(ref.name, ref)
+      continue
+    }
+
+    const shouldReplace =
+      (ref.scope === 'local' && existing.scope === 'remote') ||
+      (ref.isCurrent && !existing.isCurrent)
+
+    if (shouldReplace) {
+      branchMap.set(ref.name, ref)
+    }
+  }
+
+  return Array.from(branchMap.values()).sort((a, b) => {
+    if (a.isCurrent && !b.isCurrent) return -1
+    if (!a.isCurrent && b.isCurrent) return 1
+    return a.name.localeCompare(b.name)
+  })
+}
+
+export function getBranchRepoInfo(repoPath: string, ref: string): GitRepoInfo {
+  const currentBranch = execGit(repoPath, 'rev-parse --abbrev-ref HEAD')
+  const escapedRef = escapeGitRef(ref)
+  const totalCommitsStr = execGit(repoPath, `rev-list --count "${escapedRef}"`)
+  const lastCommitDate = execGit(repoPath, `log -1 --format=%aI "${escapedRef}"`)
+
+  let remoteUrl: string | undefined
+  try {
+    remoteUrl = execGit(repoPath, 'remote get-url origin')
+  } catch {
+    remoteUrl = undefined
+  }
+
+  return {
+    path: repoPath,
+    currentBranch,
+    totalCommits: parseInt(totalCommitsStr, 10),
+    lastCommitDate,
+    remoteUrl
+  }
+}
+
 // 최근 커밋 조회 (변경 파일 없이)
-export function getRecentCommits(repoPath: string, count: number = 20): GitCommit[] {
+export function getRecentCommits(repoPath: string, count: number = 20, ref?: string): GitCommit[] {
   // 구분자를 사용하여 한 번의 git log로 모든 커밋 정보를 가져옴
   const separator = '---COMMIT_SEP---'
   const fieldSep = '---FIELD_SEP---'
   const format = `${separator}%H${fieldSep}%h${fieldSep}%s${fieldSep}%an${fieldSep}%aI`
+  const targetRef = ref?.trim() ? ` "${escapeGitRef(ref)}"` : ''
 
-  const output = execGit(repoPath, `log -${count} --format="${format}"`)
+  const output = execGit(repoPath, `log -${count} --format="${format}"${targetRef}`)
   if (!output) return []
 
   const commits: GitCommit[] = []

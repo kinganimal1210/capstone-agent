@@ -3,6 +3,7 @@ import { DataSourceSelector } from '../components/DataSourceSelector'
 import { ToolSelector } from '../components/ToolSelector'
 import { PromptInput } from '../components/PromptInput'
 import { ResultDisplay } from '../components/ResultDisplay'
+import type { DataSource, QueryResponse, ToolType } from '../../../shared/types'
 
 // 삭제 (mockResults)
 
@@ -144,12 +145,20 @@ export function Dashboard() {
       <div className="bg-card border border-border rounded-lg p-6 mb-8">
         <PromptInput
           onSubmit={handlePromptSubmit}
+          prompt={prompt}
+          onPromptChange={setPrompt}
           disabled={!selectedTool || selectedSources.length === 0}
           isLoading={isLoading}
         />
       </div>
 
-      {showResults && (
+      {error && (
+        <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      {result && (
         <div className="animate-in fade-in duration-500">
           <div className="mb-4">
             <h2 className="text-foreground">Analysis Results</h2>

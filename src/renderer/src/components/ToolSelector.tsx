@@ -1,4 +1,5 @@
 import { Activity, FileSearch, ListChecks, BookOpen, BarChart3 } from 'lucide-react'
+import type { DataSource, ToolType } from '../../../shared/types'
 
 const tools = [
   { id: 'git-progress-analyzer', name: 'Git Progress Analyzer', icon: Activity, description: 'Analyze commits and code changes', requiredSources: ['git'] },
@@ -6,16 +7,22 @@ const tools = [
   { id: 'task-status-query', name: 'Task Status Query', icon: ListChecks, description: 'Check task completion status', requiredSources: ['tasks'] },
   { id: 'document-search', name: 'Document Search', icon: BookOpen, description: 'Search through project documents', requiredSources: ['documents'] },
   { id: 'cross-source-summary', name: 'Cross-source Report', icon: BarChart3, description: 'Generate comprehensive reports', requiredSources: ['git', 'meetings', 'tasks'] },
-]
+] as const satisfies ReadonlyArray<{
+  id: ToolType
+  name: string
+  icon: typeof Activity
+  description: string
+  requiredSources: readonly DataSource[]
+}>
 
 interface ToolSelectorProps {
-  selectedTool: string | null
-  onToolChange: (toolId: string) => void
-  availableSources: string[]
+  selectedTool: ToolType | null
+  onToolChange: (toolId: ToolType) => void
+  availableSources: DataSource[]
 }
 
 export function ToolSelector({ selectedTool, onToolChange, availableSources }: ToolSelectorProps) {
-  const isAvailable = (tool: (typeof tools)[0]) =>
+  const isAvailable = (tool: (typeof tools)[number]) =>
     tool.requiredSources.every((s) => availableSources.includes(s))
 
   return (

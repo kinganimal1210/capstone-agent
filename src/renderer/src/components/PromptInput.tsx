@@ -11,6 +11,8 @@ interface PromptInputProps {
   onSubmit: (prompt: string) => void
   disabled: boolean
   isLoading: boolean
+  prompt: string
+  onPromptChange: (prompt: string) => void
 }
 
 export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps) {
@@ -33,7 +35,7 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
       <form onSubmit={handleSubmit} className="relative">
         <textarea
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
+          onChange={(e) => onPromptChange(e.target.value)}
           placeholder="프로젝트에 대해 질문하세요..."
           disabled={disabled || isLoading}
           className="w-full h-24 px-4 py-3 pr-12 bg-input-background border border-border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed text-sm"
@@ -52,7 +54,7 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
           {examplePrompts.map((example, i) => (
             <button
               key={i}
-              onClick={() => !disabled && !isLoading && setPrompt(example)}
+              onClick={() => !disabled && !isLoading && onPromptChange(example)}
               disabled={disabled || isLoading}
               className="px-3 py-1.5 text-xs bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
