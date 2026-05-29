@@ -1,41 +1,206 @@
 import { IpcMain } from 'electron'
 import { queryLogRepository, aiLogRepository, evidenceLogRepository, meetingRepository, taskRepository, documentRepository, projectRepository, adaptiveParamsRepository } from '../database/repositories'
-import type { QueryRequest, QueryResponse, EvidenceFeedbackRequest } from '../../shared/types'
+import type { QueryRequest, QueryResponse, EvidenceFeedbackRequest, ToolType, DataSource, EvidenceItem } from '../../shared/types'
 import { buildChatMessages, type PromptBuildInput } from '../services/promptBuilder'
-import { callLLM, loadConfigFromEnv } from '../services/llmService'
-import { getRecentCommits } from '../services/gitService'
+import { callLLM, loadConfigFromEnv, LLMConfig, LLMProvider } from '../services/llmService'
+import { getRecentCommits, isValidGitRepo } from '../services/gitService'
 import { classifyQuestion } from '../services/questionClassifier'
 import { getParams, updateParamsFromBatch } from '../services/adaptiveParams'
 import { preprocessPrompt } from '../services/promptPreprocessor'
+import { getResolvedLLMSettings } from '../services/settingsService'
 import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 // .env 로드 (실제 빌드 환경에 맞게 경로 조정 필요할 수 있음)
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
+
+const toolRequiredSources: Record<ToolType, DataSource[]> = {
+  'git-progress-analyzer': ['git'],
+  'meeting-summarizer': ['meetings'],
+  'task-status-query': ['tasks'],
+  'cross-source-summary': [],
+  'document-search': ['documents'],
+  'report-generator': []
+}
+
+function validateRequest(request: QueryRequest) {
+  const project = projectRepository.getById(request.projectId)
+  const projectGitPath = typeof project?.git_path === 'string' ? project.git_path : ''
+
+  if (!request.prompt.trim()) {
+    throw new Error('질문을 입력하세요.')
+  }
+
+  const requiredSources = toolRequiredSources[request.tool] ?? []
+  const missingSources = requiredSources.filter((source) => !request.sources.includes(source))
+  if (missingSources.length > 0) {
+    throw new Error(`선택한 도구에 필요한 데이터 소스가 부족합니다: ${missingSources.join(', ')}`)
+  }
+
+  if (request.sources.includes('git')) {
+    if (!projectGitPath) {
+      throw new Error('Git 데이터 소스를 사용하려면 Settings에서 기본 Git 저장소 경로를 먼저 저장하세요.')
+    }
+    if (!isValidGitRepo(projectGitPath)) {
+      throw new Error('저장된 Git 경로가 유효한 저장소가 아닙니다. Settings에서 경로를 다시 확인하세요.')
+    }
+  }
+
+  return { project, projectGitPath }
+}
+
+interface CollectSourcesResult {
+  sources: PromptBuildInput['sources']
+  debugData: {
+    retrievedChunks: Record<string, unknown>[]
+    searchMode: string
+  }
+}
+
+function collectSources(request: QueryRequest, projectGitPath: string): CollectSourcesResult {
+  const sources: PromptBuildInput['sources'] = []
+  const debugData = { retrievedChunks: [] as Record<string, unknown>[], searchMode: 'fts' }
+
+  if (request.sources.includes('git') && projectGitPath) {
+    try {
+      const commits = getRecentCommits(projectGitPath, 50)
+      commits.forEach(c => {
+        sources.push({
+          type: 'git',
+          id: c.hash,
+          title: `${c.shortHash} ${c.message} (작성자: ${c.author}, 날짜: ${c.date.substring(0, 10)})`,
+          content: `해시: ${c.shortHash}\n작성자: ${c.author}\n날짜: ${c.date}\n메시지: ${c.message}`
+        })
+      })
+    } catch (e) {
+      console.warn('Git 데이터 수집 실패:', e)
+    }
+  }
+
+  if (request.sources.includes('meetings')) {
+    const meetings = meetingRepository.getByProject(request.projectId)
+    meetings.forEach(m => sources.push({ type: 'meeting', id: m.id as number, title: `${m.title as string} (일자: ${(m.date as string).substring(0, 10)})`, content: m.content as string }))
+  }
+
+  if (request.sources.includes('tasks')) {
+    const tasks = taskRepository.getByProject(request.projectId)
+    tasks.forEach(t => sources.push({
+      type: 'task',
+      id: t.id as number,
+      title: `${t.title as string} (상태: ${t.status}, 마감: ${t.dueDate || '없음'})`,
+      content: `상태: ${t.status as string}, 우선순위: ${t.priority as string}, 담당자: ${t.assignee as string || '없음'}, 세부: ${t.description as string || ''}`
+    }))
+  }
+
+  if (request.sources.includes('documents')) {
+    const { keywords } = preprocessPrompt(request.prompt)
+    if (keywords.length > 0) {
+      const matchedChunks = documentRepository.searchChunks(request.projectId, keywords, 30)
+      debugData.retrievedChunks = matchedChunks
+      debugData.searchMode = (matchedChunks[0] as any)?.searchMode || 'fts'
+      matchedChunks.forEach((c: any) => {
+        const contentStr = c.content as string
+        const lines = contentStr.split('\n').map(line => line.trim())
+        let firstLine = lines.find(line => line.length > 5 && /[a-zA-Z가-힣]/.test(line))
+                     || lines.find(line => line.length > 0) || ''
+        const preview = firstLine.length > 25 ? firstLine.substring(0, 25) + '...' : firstLine
+
+        sources.push({
+          type: 'document',
+          id: c.document_id,
+          title: `${c.file_name as string} (미리보기: "${preview}")`,
+          content: contentStr
+        })
+      })
+    }
+  }
+
+  return { sources, debugData }
+}
+
+async function executeLLM(messages: any[]) {
+  const settings = getResolvedLLMSettings()
+  let provider: LLMProvider | null = null
+  let config: LLMConfig | null = null
+
+  if (settings.apiKey) {
+    provider = settings.provider as LLMProvider
+    config = {
+      provider: settings.provider as LLMProvider,
+      model: settings.model,
+      apiKey: settings.apiKey,
+    }
+  } else if (process.env.OPENAI_API_KEY) {
+    provider = 'openai'
+  } else if (process.env.GEMINI_API_KEY) {
+    provider = 'gemini'
+  } else if (process.env.CLAUDE_API_KEY) {
+    provider = 'claude'
+  }
+
+  if (!provider) {
+    throw new Error('API 키가 설정되지 않았습니다. Settings에서 설정하거나 .env 파일을 확인하세요.')
+  }
+
+  if (!config) {
+    config = loadConfigFromEnv(provider)
+  }
+
+  return await callLLM(messages, config)
+}
+
+function saveQueryLogs(
+  queryLogId: number,
+  llmResponse: any,
+  contextResult: any,
+  messages: any[],
+  durationMs: number,
+  requestDetails: any
+): QueryResponse {
+  
+  aiLogRepository.create({
+    queryLogId,
+    promptSent: messages[messages.length - 1].content as string,
+    rawResponse: JSON.stringify(llmResponse),
+    tokenUsed: llmResponse.usage?.totalTokens
+  })
+
+  const evidence = contextResult.selectedChunks.map((chunk: any) => {
+    const dbId = evidenceLogRepository.create({
+      queryLogId,
+      source: chunk.sourceType as any,
+      title: chunk.sourceTitle,
+      content: chunk.text,
+      score: chunk.score
+    })
+    return {
+      id: `${chunk.sourceType}-${chunk.sourceId}`,
+      dbId,
+      source: chunk.sourceType as any,
+      title: chunk.sourceTitle,
+      content: chunk.text,
+      score: chunk.score
+    }
+  })
+
+  const response: QueryResponse = {
+    queryLogId,
+    summary: llmResponse.content,
+    evidence,
+    suggestedActions: [],
+    rawResponse: JSON.stringify(requestDetails)
+  }
+
+  queryLogRepository.updateStatus(queryLogId, 'success', JSON.stringify(response), durationMs)
+  return response
+}
+
 export function registerQueryHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('query:run', async (_event, request: QueryRequest): Promise<QueryResponse> => {
     const startTime = Date.now()
-    const project = projectRepository.getById(request.projectId)
-    const projectGitPath = typeof project?.git_path === 'string' ? project.git_path : ''
-
-    if (!request.prompt.trim()) {
-      throw new Error('질문을 입력하세요.')
-    }
-
-    const requiredSources = toolRequiredSources[request.tool] ?? []
-    const missingSources = requiredSources.filter((source) => !request.sources.includes(source))
-    if (missingSources.length > 0) {
-      throw new Error(`선택한 도구에 필요한 데이터 소스가 부족합니다: ${missingSources.join(', ')}`)
-    }
-
-    if (request.sources.includes('git')) {
-      if (!projectGitPath) {
-        throw new Error('Git 데이터 소스를 사용하려면 Settings에서 기본 Git 저장소 경로를 먼저 저장하세요.')
-      }
-      if (!isValidGitRepo(projectGitPath)) {
-        throw new Error('저장된 Git 경로가 유효한 저장소가 아닙니다. Settings에서 경로를 다시 확인하세요.')
-      }
-    }
+    
+    // 1. 유효성 검사
+    const { projectGitPath } = validateRequest(request)
 
     // query_log 저장
     const queryLogId = queryLogRepository.create({
@@ -46,133 +211,52 @@ export function registerQueryHandlers(ipcMain: IpcMain): void {
     })
 
     try {
-      // 1. 소스 데이터 수집
-      const sources: PromptBuildInput['sources'] = []
+      const { keywords } = preprocessPrompt(request.prompt)
 
-      // Git 소스 추가
-      if (request.sources.includes('git')) {
-        const project = projectRepository.getById(request.projectId)
-        if (project && project.git_path) {
-          try {
-            const commits = getRecentCommits(project.git_path as string, 50)
-            commits.forEach(c => {
-              sources.push({
-                type: 'git',
-                id: c.hash,
-                title: `${c.shortHash} ${c.message} (작성자: ${c.author}, 날짜: ${c.date.substring(0, 10)})`,
-                content: `해시: ${c.shortHash}\n작성자: ${c.author}\n날짜: ${c.date}\n메시지: ${c.message}`
-              })
-            })
-          } catch (e) {
-            console.warn('Git 데이터 수집 실패:', e)
-          }
-        }
-      }
-      
-      if (request.sources.includes('meetings')) {
-        const meetings = meetingRepository.getByProject(request.projectId)
-        meetings.forEach(m => sources.push({ type: 'meeting', id: m.id as number, title: `${m.title as string} (일자: ${(m.date as string).substring(0, 10)})`, content: m.content as string }))
-      }
-      if (request.sources.includes('tasks')) {
-        const tasks = taskRepository.getByProject(request.projectId)
-        tasks.forEach(t => sources.push({ 
-          type: 'task', 
-          id: t.id as number, 
-          title: `${t.title as string} (상태: ${t.status}, 마감: ${t.dueDate || '없음'})`, 
-          content: `상태: ${t.status as string}, 우선순위: ${t.priority as string}, 담당자: ${t.assignee as string || '없음'}, 세부: ${t.description as string || ''}` 
-        }))
-      }
-      if (request.sources.includes('documents')) {
-        // 1. 질문에서 키워드 추출
-        const { keywords } = preprocessPrompt(request.prompt)
-        
-        if (keywords.length > 0) {
-          // 2. FTS5를 통해 DB에서 직접 관련 청크 검색 (상위 10개)
-          // (Chunker에서 2차로 score 순으로 정렬하므로 여기서는 넉넉히 가져옴)
-          const matchedChunks = documentRepository.searchChunks(request.projectId, keywords, 10)
-          matchedChunks.forEach((c: any) => {
-            const contentStr = c.content as string
-            const lines = contentStr.split('\n').map(line => line.trim())
-            // 알파벳이나 한글이 포함된 5글자 이상의 줄을 우선적으로 찾음
-            let firstLine = lines.find(line => line.length > 5 && /[a-zA-Z가-힣]/.test(line)) 
-                         || lines.find(line => line.length > 0) || ''
-            const preview = firstLine.length > 25 ? firstLine.substring(0, 25) + '...' : firstLine
+      // 2. 소스 데이터 수집 (키워드가 없으면 불필요한 검색 생략 - Short-circuit)
+      const { sources, debugData } = keywords.length > 0 ? collectSources(request, projectGitPath) : { sources: [], debugData: { retrievedChunks: [], searchMode: 'fts' } }
 
-            sources.push({ 
-              type: 'document', 
-              id: c.document_id, 
-              title: `${c.file_name as string} (미리보기: "${preview}")`, 
-              content: contentStr
-            })
-          })
-        }
-      }
-
-      // 2. 질문 유형 분류 + 적응형 파라미터 조회
+      // 3. 질문 유형 분류 + 적응형 파라미터 조회
       const questionType = classifyQuestion(request.prompt)
       const userId = (request as any).userId ?? 'default'
       const adaptiveContextOptions = getParams(userId, questionType)
 
-      // 3. RAG 파이프라인 (프롬프트 & 컨텍스트 빌드)
-      const { messages, contextResult, stats } = buildChatMessages({
+      // 4. RAG 파이프라인 (프롬프트 & 컨텍스트 빌드)
+      const { messages, contextResult } = buildChatMessages({
         userQuestion: request.prompt,
         sources,
         contextOptions: adaptiveContextOptions
       })
 
-      // 4. LLM 호출
-      const provider = process.env.OPENAI_API_KEY ? 'openai' : 
-                      process.env.GEMINI_API_KEY ? 'gemini' : 
-                      process.env.CLAUDE_API_KEY ? 'claude' : null;
-
-      if (!provider) {
-        throw new Error('API 키가 설정되지 않았습니다. .env 파일을 확인하세요.')
-      }
-
-      const config = loadConfigFromEnv(provider as any)
-      const llmResponse = await callLLM(messages, config)
-
-      // 5. 응답 포맷팅
-      const response: QueryResponse = {
-        queryLogId,
-        summary: llmResponse.content,
-        evidence: contextResult.selectedChunks.map(chunk => ({
-          id: `${chunk.sourceType}-${chunk.sourceId}`,
-          source: chunk.sourceType as any,
-          title: chunk.sourceTitle,
-          content: chunk.text,
-          score: chunk.score
-        })),
-        suggestedActions: [],
-        rawResponse: JSON.stringify({ questionType, userId, adaptiveContextOptions })
-      }
+      // 5. LLM 호출
+      const llmResponse = await executeLLM(messages)
 
       const durationMs = Date.now() - startTime
 
-      // AI 로그 저장
-      aiLogRepository.create({
+      // 6. 로그 저장 및 응답 반환
+      return saveQueryLogs(
         queryLogId,
-        promptSent: messages[messages.length - 1].content as string, // user prompt
-        rawResponse: JSON.stringify(llmResponse),
-        tokenUsed: llmResponse.usage?.totalTokens
-      })
-
-      // Evidence 로그 저장 및 dbId 할당
-      response.evidence = response.evidence.map(ev => {
-        const dbId = evidenceLogRepository.create({
-          queryLogId,
-          source: ev.source,
-          title: ev.title,
-          content: ev.content,
-          score: ev.score
-        })
-        return { ...ev, dbId }
-      })
-
-      // 쿼리 로그 상태 업데이트
-      queryLogRepository.updateStatus(queryLogId, 'success', JSON.stringify(response), durationMs)
-
-      return response
+        llmResponse,
+        contextResult,
+        messages,
+        durationMs,
+        { 
+          questionType, 
+          userId, 
+          adaptiveContextOptions, 
+          debugInfo: { 
+            extractedKeywords: keywords,
+            retrievedChunks: debugData.retrievedChunks.length,
+            searchMode: debugData.searchMode,
+            contextChars: contextResult.stats.totalChars,
+            selectedChunks: contextResult.selectedChunks.map(c => ({
+              rank: c.score,
+              fileName: c.sourceTitle.split(' (')[0],
+              title: c.sourceTitle
+            }))
+          } 
+        }
+      )
     } catch (error: any) {
       const durationMs = Date.now() - startTime
       queryLogRepository.updateStatus(queryLogId, 'error', error.message, durationMs)
@@ -196,7 +280,7 @@ export function registerQueryHandlers(ipcMain: IpcMain): void {
     return { ...log, aiLogs, evidenceLogs }
   })
 
-  // Evidence 개별 피드백 저장 (파라미터 업데이트는 하지 않음)
+  // Evidence 개별 피드백 저장
   ipcMain.handle('evidence:feedback', async (_event, data: EvidenceFeedbackRequest) => {
     adaptiveParamsRepository.createFeedback(
       data.userId,
@@ -208,7 +292,7 @@ export function registerQueryHandlers(ipcMain: IpcMain): void {
     return { success: true }
   })
 
-  // 한 질문의 모든 evidence 피드백을 배치로 제출 → 집계 후 파라미터 업데이트
+  // 피드백 배치 처리
   ipcMain.handle('evidence:submitAll', async (_event, data: {
     userId: string
     queryLogId: number
@@ -216,7 +300,6 @@ export function registerQueryHandlers(ipcMain: IpcMain): void {
     feedbacks: { evidenceLogId: number; feedback: import('../../shared/types').EvidenceFeedbackType }[]
     totalEvidenceCount: number
   }) => {
-    // 1. 각 피드백을 개별 저장
     for (const item of data.feedbacks) {
       adaptiveParamsRepository.createFeedback(
         data.userId,
@@ -227,7 +310,6 @@ export function registerQueryHandlers(ipcMain: IpcMain): void {
       )
     }
 
-    // 2. 피드백 배열을 집계하여 파라미터 한 번만 업데이트
     const feedbackTypes = data.feedbacks.map(f => f.feedback)
     const updatedParams = updateParamsFromBatch(
       data.userId, 
@@ -239,7 +321,7 @@ export function registerQueryHandlers(ipcMain: IpcMain): void {
     return { success: true, updatedParams }
   })
 
-  // 사용자의 현재 적응형 파라미터 조회
+  // 사용자 파라미터 조회
   ipcMain.handle('adaptive:getParams', (_event, userId: string) => {
     return adaptiveParamsRepository.getAllByUser(userId)
   })

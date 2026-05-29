@@ -32,7 +32,36 @@ const STOPWORDS = new Set([
   '알려줘', '알려주세요', '해줘', '해주세요', '보여줘', '보여주세요',
   '뭐야', '뭔가요', '인가요', '인가', '일까', '일까요',
   '말해줘', '말해주세요', '찾아줘', '찾아주세요',
+  '설명해줘', '설명해주세요', '분석해', '분석해줘', '분석해주세요',
+  '있는지', '참고해서', '바탕으로', '기반으로', '대해서',
+  '도입한다면', '있을까', '언급된', '작성해야', '하는지', '요약해봐', '요약해',
+  '분석하고', '지연된다면', '미칠지', '순차적', '추론해줘', '참고하여', '발생할',
+  '예측해보고', '통신할', '막으려면', '짜야하는지', '분석해봐', '발생한다고',
+  '가정했', '계획된', '분석해서', '일어날지', '예측해봐', '비교해서', '선정한',
+  '증명할지', '비교하고', '커질', '경우', '설계해야', '어떤', '대해', '어디',
+  '나열해줘', '찾아서', '비교해봐', '알려줘.', '비교해봐.',
+  '설정', '파일', '로컬', '구동', '시스템', '외부', '코드', '원인', '기능',
+  '초안', '결과', '장단점', '단계별', '예상되는', '실제', '명시되어', '다이어그램',
+  '입력하고', '수정하', '방식', '차이점', 'API와'
 ])
+
+// ── 동의어 사전 (Synonyms) ──────────────────────────────────────────
+const SYNONYMS: Record<string, string[]> = {
+  '리트리벌': ['retrieval'],
+  '하이브리드': ['hybrid'],
+  '보안': ['security', 'api key', 'env', 'token', 'secret', 'exposure'],
+  '유출': ['leak', 'expose', 'credential'],
+  '의존성': ['package', 'dependency'],
+  '패키지': ['package', 'dependency', 'package.json'],
+  '빌드': ['vite', 'electron-builder', 'package.json', 'tsconfig'],
+  '디비': ['db', 'database'],
+  '데이터베이스': ['db', 'database'],
+  '데몬': ['daemon'],
+  '캐시': ['cache'],
+  '리랭킹': ['reranking', 'rerank'],
+  '외부': ['apiKey', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'CLAUDE_API_KEY'],
+  '앱': ['electron', 'preload', 'ipc', 'nodeIntegration', 'contextIsolation']
+}
 
 // ── 조사 분리용 정규식 패턴 ──────────────────────────────────────
 // 한글 단어 뒤에 붙은 조사를 분리합니다.
@@ -50,7 +79,7 @@ export function normalize(text: string): string {
   return text
     .trim()
     .replace(/\s+/g, ' ')
-    .replace(/[~!@#$%^&*()\-_=+\[\]{}|\\;:'",<>/?`]+/g, ' ')
+    .replace(/[~!@#$%^&*()\-_=+\[\]{}|\\;:'",.<>/?`]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -95,8 +124,17 @@ export function extractKeywords(userInput: string): string[] {
   // 4) 불용어 제거
   const meaningful = removeStopwords(tokens)
 
+  // 동의어 확장 (1단계 성능 튜닝)
+  const expanded: string[] = []
+  for (const t of meaningful) {
+    expanded.push(t)
+    if (SYNONYMS[t]) {
+      expanded.push(...SYNONYMS[t])
+    }
+  }
+
   // 5) 중복 제거 (순서 유지)
-  return [...new Set(meaningful)]
+  return [...new Set(expanded)]
 }
 
 /**

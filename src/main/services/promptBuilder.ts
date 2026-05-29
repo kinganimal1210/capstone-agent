@@ -13,18 +13,33 @@ import { buildContext, estimateTokens, type ContextBuildResult } from './context
 // ── 시스템 프롬프트 템플릿 ───────────────────────────────────────
 // 간결한 지시로 토큰 절약 (불필요한 수식어 제거)
 
+const CITATION_INSTRUCTION = `답변을 작성할 때는 반드시 참고한 자료의 [출처/문서명]을 인용(Citation)하여 문장 끝에 표기하세요.`;
+
+const FORMAT_INSTRUCTION = `
+답변은 반드시 아래 형식을 지켜주세요:
+
+## 요약
+(답변 요약)
+
+## 근거
+- [문서명/출처] 근거 설명
+
+## 확실하지 않은 점
+(없음 또는 문서에서 확인되지 않은 부분)
+`;
+
 const SYSTEM_PROMPTS = {
   /** 프로젝트 정보 기반 일반 질의 */
-  general: `프로젝트 관리 AI 어시스턴트. 아래 참고자료 기반으로 답변. 자료에 없으면 "해당 정보 없음" 표기. 간결하게 답변.`,
+  general: `프로젝트 관리 AI 어시스턴트. 아래 참고자료 기반으로 답변. 자료에 없으면 "해당 정보 없음" 표기. 간결하게 답변. ${CITATION_INSTRUCTION}\n${FORMAT_INSTRUCTION}`,
 
   /** 태스크 관련 질의 */
-  task: `태스크 관리 AI. 아래 태스크 자료 기반 답변. 상태·우선순위·마감일 포함. 자료 외 추측 금지.`,
+  task: `태스크 관리 AI. 아래 태스크 자료 기반 답변. 상태·우선순위·마감일 포함. 자료 외 추측 금지. ${CITATION_INSTRUCTION}\n${FORMAT_INSTRUCTION}`,
 
   /** 회의록 요약·검색 */
-  meeting: `회의록 분석 AI. 아래 회의 자료 기반 답변. 핵심 결정사항·액션아이템 중심. 자료 외 추측 금지.`,
+  meeting: `회의록 분석 AI. 아래 회의 자료 기반 답변. 핵심 결정사항·액션아이템 중심. 자료 외 추측 금지. ${CITATION_INSTRUCTION}\n${FORMAT_INSTRUCTION}`,
 
   /** 문서 내용 질의 */
-  document: `문서 분석 AI. 아래 문서 내용 기반 답변. 자료 외 추측 금지.`,
+  document: `문서 분석 AI. 아래 문서 내용 기반 답변. 자료 외 추측 금지. ${CITATION_INSTRUCTION}\n${FORMAT_INSTRUCTION}`,
 } as const
 
 export type PromptType = keyof typeof SYSTEM_PROMPTS

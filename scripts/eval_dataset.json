@@ -1,0 +1,142 @@
+[
+  {
+    "id": 1,
+    "type": "short_simple",
+    "question": "캡스톤 프로젝트 주제가 뭐야?",
+    "expected_keywords": ["데스크톱", "에이전트"],
+    "expected_answer_summary": "캡스톤 프로젝트 핵심 주제 및 시스템 형태"
+  },
+  {
+    "id": 2,
+    "type": "short_simple",
+    "question": "주요 도구 종류 알려줘.",
+    "expected_keywords": ["Git", "Progress", "Analyzer", "Meeting", "Task"],
+    "expected_answer_summary": "사용 가능한 주요 AI 도구 목록"
+  },
+  {
+    "id": 3,
+    "type": "short_simple",
+    "question": "후순위 연구 작업이 뭐야?",
+    "expected_keywords": ["daemon", "hybrid", "reranking", "cache"],
+    "expected_answer_summary": "후순위로 지정된 연구형 기능 리스트"
+  },
+  {
+    "id": 4,
+    "type": "short_simple",
+    "question": "5주차 핵심 목표 알려줘.",
+    "expected_keywords": ["5주차", "회의록", "태스크", "CRUD"],
+    "expected_answer_summary": "5주차 CRUD 기능 구현 목표"
+  },
+  {
+    "id": 5,
+    "type": "short_simple",
+    "question": "UI 구성 요소 뭐뭐 있어?",
+    "expected_keywords": ["Summary", "Evidence", "Actions"],
+    "expected_answer_summary": "결과 화면 UI의 핵심 구성 요소"
+  },
+  {
+    "id": 6,
+    "type": "short_complex",
+    "question": "4주차 로컬 DB 설계와 5주차 CRUD 작업의 차이점 비교해봐.",
+    "expected_keywords": ["4주차", "DB", "5주차", "CRUD"],
+    "expected_answer_summary": "DB 설계(4주차)와 실제 데이터 입력(5주차) 작업의 차이점"
+  },
+  {
+    "id": 7,
+    "type": "short_complex",
+    "question": "만약 하이브리드 리트리벌을 도입한다면 어떤 장점이 있을까?",
+    "expected_keywords": ["hybrid", "retrieval", "하이브리드"],
+    "expected_answer_summary": "하이브리드 검색 도입의 기술적 이점"
+  },
+  {
+    "id": 8,
+    "type": "short_complex",
+    "question": "Git Progress Analyzer와 Task Status Query 기능 차이 분석해.",
+    "expected_keywords": ["Git", "Progress", "Task", "Status"],
+    "expected_answer_summary": "코드 진행도 분석 도구와 태스크 조회 도구의 차이"
+  },
+  {
+    "id": 9,
+    "type": "short_complex",
+    "question": "마일스톤을 분석하고 리스크 요인을 찾아줘.",
+    "expected_keywords": ["마일스톤", "리스크"],
+    "expected_answer_summary": "계획서에 명시된 마일스톤과 리스크 요인"
+  },
+  {
+    "id": 10,
+    "type": "short_complex",
+    "question": "pdf 문서 파싱이 안된다면 대안이 뭐야?",
+    "expected_keywords": ["pdf", "파서", "대안"],
+    "expected_answer_summary": "pdf 등 문서 파서 문제 발생 시 대체 방안"
+  },
+  {
+    "id": 11,
+    "type": "long_simple",
+    "question": "캡스톤 15주 개발 플랜 중에서 8주차에 예정된 회의록과 태스크 리트리벌 기능에 대해 찾아서 설명해줘.",
+    "expected_keywords": ["8주차", "회의록", "태스크", "retrieval"],
+    "expected_answer_summary": "8주차의 회의록 및 태스크 기반 Retrieval 구현 계획"
+  },
+  {
+    "id": 12,
+    "type": "long_simple",
+    "question": "프론트엔드 UI 확장 작업 중에서 source나 tool 설명 UI랑 최근 실행 쿼리 내역 보여주는 기능이 어디 명시되어 있는지 나열해줘.",
+    "expected_keywords": ["UI", "확장", "source", "tool", "쿼리"],
+    "expected_answer_summary": "UI 확장 작업에 해당하는 프리셋 및 쿼리 캐시 기능 명세"
+  },
+  {
+    "id": 13,
+    "type": "long_simple",
+    "question": "프로젝트 연구형 기능으로 언급된 캐시 매니저와 랭킹 추상화 설계 초안 결과를 어떤 다이어그램으로 작성해야 하는지 요약해봐.",
+    "expected_keywords": ["캐시", "매니저", "랭킹", "추상화", "다이어그램"],
+    "expected_answer_summary": "연구형 기능의 설계 초안(아키텍처 다이어그램 등) 요약"
+  },
+  {
+    "id": 14,
+    "type": "long_simple",
+    "question": "캡스톤 연구 계획서와 AGENTS.md 파일 중에서 AI가 읽을 협업 데이터를 실제로 입력하고 수정하는 주차 목표를 정리해줄래?",
+    "expected_keywords": ["AGENTS.md", "협업", "데이터", "입력", "수정"],
+    "expected_answer_summary": "협업 데이터 구축을 위한 구체적인 작업 주차 명시"
+  },
+  {
+    "id": 15,
+    "type": "long_simple",
+    "question": "데스크톱 AI 에이전트 시스템의 MVP 범위와 확장 기능, 그리고 후순위 연구형 기능이 어떻게 나뉘어 있는지 문서들을 참고해서 요약해줘.",
+    "expected_keywords": ["MVP", "확장", "연구형", "기능"],
+    "expected_answer_summary": "프로젝트의 3단계 범주(MVP, 확장 기능, 연구형) 요약"
+  },
+  {
+    "id": 16,
+    "type": "long_complex",
+    "question": "만약 백그라운드 인덱싱 데몬(background indexing daemon)에 장애가 발생한다고 가정했을 때, 현재 계획된 캐시 매니저나 하이브리드 리트리벌 구조를 분석해서 어떤 성능 저하가 일어날지 예측해봐.",
+    "expected_keywords": ["background", "indexing", "daemon", "캐시", "하이브리드", "장애"],
+    "expected_answer_summary": "백그라운드 데몬 오류 시 시스템 파급 효과"
+  },
+  {
+    "id": 17,
+    "type": "long_complex",
+    "question": "4주차 로컬 DB 설계 스키마와 5주차 프로젝트 CRUD 완료 목표를 비교 분석하고, 만약 일정이 지연된다면 8주차 리트리벌 기능 구현에 어떤 영향을 미칠지 순차적으로 추론해줘.",
+    "expected_keywords": ["4주차", "DB", "스키마", "5주차", "CRUD", "8주차", "리트리벌", "일정"],
+    "expected_answer_summary": "초기 DB 및 CRUD 작업 지연이 후반부 RAG(Retrieval) 구현에 주는 영향"
+  },
+  {
+    "id": 18,
+    "type": "long_complex",
+    "question": "AGENTS.md 파일의 행동 지침과 캡스톤 연구 계획서의 주요 개발 목표를 비교해서, 우리가 후순위 연구 작업으로 선정한 리랭킹(reranking)과 요약 캐시(summary cache)의 필요성을 어떻게 증명할지 구체적인 근거를 들어 평가해.",
+    "expected_keywords": ["AGENTS.md", "리랭킹", "reranking", "요약", "cache"],
+    "expected_answer_summary": "행동 지침과 연구 목표를 바탕으로 리랭킹과 캐시의 연구 가치 논증"
+  },
+  {
+    "id": 19,
+    "type": "long_complex",
+    "question": "기존 단순 키워드 검색 방식과 캡스톤 프로젝트에서 목표로 하는 하이브리드 검색 및 미니 데몬(mini daemon) 구조의 장단점을 비교하고, 만약 시스템이 커질 경우 캐시 매니저 인터페이스를 어떻게 설계해야 하는지 단계별로 분석해줘.",
+    "expected_keywords": ["하이브리드", "미니", "daemon", "캐시", "매니저", "인터페이스"],
+    "expected_answer_summary": "검색 방식 장단점 비교 및 확장성을 고려한 캐시 매니저 설계"
+  },
+  {
+    "id": 20,
+    "type": "long_complex",
+    "question": "패키지 의존성 설정과 빌드 설정 파일을 참고하여 로컬 앱 구동 시 발생할 수 있는 보안 취약점을 예측해보고, 만약 에이전트 시스템이 외부 API와 통신할 때 데이터 유출을 막으려면 어떤 방어 코드를 짜야하는지 원인을 분석해봐.",
+    "expected_keywords": ["패키지", "의존성", "빌드", "보안", "취약점", "데이터", "유출", "방어"],
+    "expected_answer_summary": "빌드 설정 및 API 통신 시 잠재적 보안 이슈와 방어 전략"
+  }
+]

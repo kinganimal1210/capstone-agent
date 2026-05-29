@@ -16,12 +16,14 @@ const getInitialDashboardState = () => {
 }
 
 export function Dashboard() {
-  const [selectedSources, setSelectedSources] = useState<string[]>(() => getInitialDashboardState()?.selectedSources || ['git'])
-  const [selectedTool, setSelectedTool] = useState<string | null>(() => getInitialDashboardState()?.selectedTool || 'git-progress-analyzer')
+  const [selectedSources, setSelectedSources] = useState<DataSource[]>(() => getInitialDashboardState()?.selectedSources || ['git'])
+  const [selectedTool, setSelectedTool] = useState<ToolType | null>(() => getInitialDashboardState()?.selectedTool || 'git-progress-analyzer')
   const [isLoading, setIsLoading] = useState(false)
   const [showResults, setShowResults] = useState<boolean>(() => getInitialDashboardState()?.showResults || false)
+  const [prompt, setPrompt] = useState(() => localStorage.getItem('dashboardPrompt') || '')
+  const [error, setError] = useState<string | null>(null)
 
-  const [results, setResults] = useState<{summary: string, evidence: any[], suggestedActions: any[], queryLogId?: number, rawResponse?: string}>(() => 
+  const [results, setResults] = useState<{summary: string, evidence: any[], suggestedActions: any[], queryLogId?: number, rawResponse?: string, debugInfo?: any}>(() => 
     getInitialDashboardState()?.results || { summary: '', evidence: [], suggestedActions: [] }
   )
 
@@ -40,20 +42,32 @@ export function Dashboard() {
     localStorage.setItem('dashboardState', JSON.stringify(stateToSave))
   }, [selectedSources, selectedTool, showResults, results])
 
-  const handlePromptSubmit = async (prompt: string) => {
+  useEffect(() => {
+    localStorage.setItem('dashboardPrompt', prompt)
+  }, [prompt])
+
+  const handlePromptSubmit = async (submittedPrompt: string) => {
     setIsLoading(true)
     setShowResults(false)
+    setError(null)
     setFeedbacks({}) // 새로운 쿼리 시 피드백 초기화
     setFeedbackSubmitted(false)
     try {
       // API 호출 (기본 프로젝트 ID 1 사용)
       const response = await window.api.query({
         projectId: 1, 
-        sources: selectedSources as any[],
-        tool: selectedTool as any || 'report-generator',
+        sources: selectedSources,
+        tool: selectedTool || 'report-generator',
         prompt: prompt
       })
       
+      let debugInfo = undefined;
+      try {
+        if (response.rawResponse) {
+          debugInfo = JSON.parse(response.rawResponse).debugInfo;
+        }
+      } catch (err) {}
+
       setResults({
         queryLogId: response.queryLogId,
         rawResponse: response.rawResponse,
@@ -62,19 +76,17 @@ export function Dashboard() {
           dbId: e.dbId,
           source: e.source,
           title: e.title,
-          snippet: e.content
+          snippet: e.content,
+          score: e.score
         })),
-        suggestedActions: response.suggestedActions || []
+        suggestedActions: response.suggestedActions || [],
+        debugInfo
       })
+      setShowResults(true)
       setShowResults(true)
     } catch (e: any) {
       console.error(e)
-      setResults({
-        summary: '⚠️ 오류가 발생했습니다: ' + e.message,
-        evidence: [],
-        suggestedActions: []
-      })
-      setShowResults(true)
+      setError(e.message)
     } finally {
       setIsLoading(false)
     }
@@ -117,10 +129,9 @@ export function Dashboard() {
       })
 
       setFeedbackSubmitted(true)
-      alert('피드백이 반영되어 파라미터가 최적화되었습니다!')
     } catch (e: any) {
       console.error(e)
-      alert('피드백 제출 실패: ' + e.message)
+      setError('피드백 제출 실패: ' + e.message)
     } finally {
       setIsSubmittingFeedback(false)
     }
@@ -158,7 +169,7 @@ export function Dashboard() {
         </div>
       )}
 
-      {result && (
+      {showResults && (
         <div className="animate-in fade-in duration-500">
           <div className="mb-4">
             <h2 className="text-foreground">Analysis Results</h2>
@@ -169,6 +180,7 @@ export function Dashboard() {
             suggestedActions={results.suggestedActions}
             feedbacks={feedbacks}
             onFeedbackChange={handleFeedbackChange}
+            debugInfo={results.debugInfo}
           />
 
           {/* 피드백 제출 버튼 */}

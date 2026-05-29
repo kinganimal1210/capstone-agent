@@ -8,7 +8,7 @@
  *   npm install openai @anthropic-ai/sdk @google/generative-ai dotenv
  */
 
-// ── 타입 정의 ────────────────────────────────────────────────────
+// Types
 
 export type LLMProvider = 'openai' | 'claude' | 'gemini'
 
@@ -45,7 +45,7 @@ export interface LLMResponse {
   latencyMs: number
 }
 
-// ── 기본 모델 설정 ───────────────────────────────────────────────
+// Default Models
 
 const DEFAULT_MODELS: Record<LLMProvider, string> = {
   openai: 'gpt-4o-mini',
@@ -56,7 +56,7 @@ const DEFAULT_MODELS: Record<LLMProvider, string> = {
 const DEFAULT_MAX_TOKENS = 1024
 const DEFAULT_TEMPERATURE = 0.3
 
-// ── OpenAI API 호출 ──────────────────────────────────────────────
+// OpenAI API
 
 async function callOpenAI(
   messages: LLMMessage[],
@@ -96,7 +96,7 @@ async function callOpenAI(
   }
 }
 
-// ── Anthropic Claude API 호출 ────────────────────────────────────
+// Anthropic Claude API
 
 async function callClaude(
   messages: LLMMessage[],
@@ -147,7 +147,7 @@ async function callClaude(
   }
 }
 
-// ── Google Gemini API 호출 ───────────────────────────────────────
+// Google Gemini API
 
 async function callGemini(
   messages: LLMMessage[],
@@ -204,7 +204,7 @@ async function callGemini(
   }
 }
 
-// ── 통합 호출 함수 ───────────────────────────────────────────────
+// LLM Call Wrapper
 
 /**
  * LLM API를 호출합니다.
@@ -237,8 +237,7 @@ export async function callLLM(
   }
 }
 
-// ── 유틸리티: 환경변수에서 설정 로드 ─────────────────────────────
-
+// Utility: Load config from env
 /**
  * 환경변수에서 LLM 설정을 로드합니다.
  *

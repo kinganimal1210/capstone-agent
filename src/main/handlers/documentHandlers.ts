@@ -132,18 +132,23 @@ export function registerDocumentHandlers(ipcMain: IpcMain): void {
         }))
       )
 
+      let errorMessages: string[] = []
+
       // 동기적 인덱싱 대기 (사용자 질의 전 청크 보장)
       await Promise.all(
         addedDocs.map(async (doc) => {
           try {
             await indexDocument(doc.id, doc.filePath)
-          } catch (e) {
+          } catch (e: any) {
             console.error('인덱싱 실패:', e)
+            errorMessages.push(`${path.basename(doc.filePath)}: ${e.message}`)
           }
         })
       )
 
-      return { error: null, count: addedDocs.length, total: files.length }
+      const finalError = errorMessages.length > 0 ? `일부 파일 인덱싱 실패:\n${errorMessages.slice(0, 3).join('\n')}${errorMessages.length > 3 ? '\n...등' : ''}` : null
+
+      return { error: finalError, count: addedDocs.length, total: files.length }
     }
   )
 
@@ -173,18 +178,23 @@ export function registerDocumentHandlers(ipcMain: IpcMain): void {
 
       const addedDocs = documentRepository.createBatch(filesToAdd)
       
+      let errorMessages: string[] = []
+
       // 동기적 인덱싱 대기 (사용자 질의 전 청크 보장)
       await Promise.all(
         addedDocs.map(async (doc) => {
           try {
             await indexDocument(doc.id, doc.filePath)
-          } catch (e) {
+          } catch (e: any) {
             console.error('인덱싱 실패:', e)
+            errorMessages.push(`${path.basename(doc.filePath)}: ${e.message}`)
           }
         })
       )
 
-      return { error: null, count: addedDocs.length, total: filePaths.length }
+      const finalError = errorMessages.length > 0 ? `일부 파일 인덱싱 실패:\n${errorMessages.slice(0, 3).join('\n')}${errorMessages.length > 3 ? '\n...등' : ''}` : null
+
+      return { error: finalError, count: addedDocs.length, total: filePaths.length }
     }
   )
 

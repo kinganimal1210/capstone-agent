@@ -61,6 +61,63 @@ export const migrations: Migration[] = [
       db.run('CREATE INDEX IF NOT EXISTS idx_evidence_feedback_query ON evidence_feedback(query_log_id)')
     }
   },
+  {
+    version: 'V003',
+    description: 'projects 테이블에 status 컬럼 추가',
+    up: (db) => {
+      let hasStatus = false
+      const stmt = db.prepare('PRAGMA table_info(projects)')
+      while (stmt.step()) {
+        const row = stmt.getAsObject() as { name: string }
+        if (row.name === 'status') {
+          hasStatus = true
+          break
+        }
+      }
+      stmt.free()
+
+      if (!hasStatus) {
+        db.run("ALTER TABLE projects ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
+      }
+    }
+  },
+  {
+    version: 'V004',
+    description: 'document_chunks 및 FTS 가상 테이블 보정',
+    up: (db) => {
+      // document_chunks 테이블
+      db.run(`
+        CREATE TABLE IF NOT EXISTS document_chunks (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          document_id INTEGER NOT NULL,
+          chunk_index INTEGER NOT NULL,
+          content TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (document_id) REFERENCES document_sources(id) ON DELETE CASCADE
+        )
+      `)
+      // FTS 테이블
+      db.run(`CREATE VIRTUAL TABLE IF NOT EXISTS document_chunks_fts USING fts4(content)`)
+      
+      // 트리거
+      db.run(`
+        CREATE TRIGGER IF NOT EXISTS document_chunks_ai AFTER INSERT ON document_chunks BEGIN
+          INSERT INTO document_chunks_fts(docid, content) VALUES (new.id, new.content);
+        END;
+      `)
+      db.run(`
+        CREATE TRIGGER IF NOT EXISTS document_chunks_ad AFTER DELETE ON document_chunks BEGIN
+          DELETE FROM document_chunks_fts WHERE docid = old.id;
+        END;
+      `)
+      db.run(`
+        CREATE TRIGGER IF NOT EXISTS document_chunks_au AFTER UPDATE ON document_chunks BEGIN
+          DELETE FROM document_chunks_fts WHERE docid = old.id;
+          INSERT INTO document_chunks_fts(docid, content) VALUES (new.id, new.content);
+        END;
+      `)
+    }
+  },
 ]
 
 // ── 마이그레이션 엔진 ────────────────────────────────────────────

@@ -1,9 +1,12 @@
+import React from 'react'
 import { CheckCircle2, AlertCircle, FileText, ChevronRight, ThumbsUp, ThumbsDown } from 'lucide-react'
 
 interface Evidence {
   source: string
   title: string
-  snippet: string
+  snippet?: string
+  content?: string
+  score?: number
   dbId?: number
 }
 
@@ -19,23 +22,45 @@ interface ResultDisplayProps {
   suggestedActions: SuggestedAction[]
   feedbacks?: Record<number, 'interested' | 'not_interested'>
   onFeedbackChange?: (dbId: number, type: 'interested' | 'not_interested') => void
+  debugInfo?: any
 }
 
-export function ResultDisplay({ summary, evidence, suggestedActions, feedbacks = {}, onFeedbackChange }: ResultDisplayProps) {
+export function ResultDisplay({ summary, evidence, suggestedActions, feedbacks = {}, onFeedbackChange, debugInfo }: ResultDisplayProps) {
+  const [showDebug, setShowDebug] = React.useState(false)
+
   return (
     <div className="space-y-6">
       {/* Summary */}
       <div className="bg-card border border-border rounded-lg p-6">
-        <div className="flex items-start gap-3 mb-4">
-          <div className="p-2 bg-primary/10 rounded-md">
-            <CheckCircle2 className="w-5 h-5 text-primary" />
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-primary/10 rounded-md">
+              <CheckCircle2 className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-foreground mb-1">Summary</h3>
+              <p className="text-sm text-muted-foreground">분석 결과 요약</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-foreground mb-1">Summary</h3>
-            <p className="text-sm text-muted-foreground">분석 결과 요약</p>
-          </div>
+          {debugInfo && (
+            <button
+              onClick={() => setShowDebug(!showDebug)}
+              className={`text-xs px-2 py-1 rounded border transition-colors ${showDebug ? 'bg-primary/20 border-primary text-primary' : 'bg-transparent border-border text-muted-foreground hover:bg-accent'}`}
+            >
+              Debug Mode {showDebug ? 'ON' : 'OFF'}
+            </button>
+          )}
         </div>
         <p className="text-foreground leading-relaxed text-sm whitespace-pre-wrap">{summary}</p>
+        
+        {showDebug && debugInfo && (
+          <div className="mt-4 p-4 bg-background/50 border border-border rounded-lg">
+            <h4 className="text-sm font-semibold text-foreground mb-2">Debug Information</h4>
+            <div className="text-xs text-muted-foreground font-mono whitespace-pre-wrap">
+              {JSON.stringify(debugInfo, null, 2)}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Evidence */}
@@ -57,6 +82,9 @@ export function ResultDisplay({ summary, evidence, suggestedActions, feedbacks =
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded">{item.source}</span>
                     <span className="text-sm text-foreground">{item.title}</span>
+                    {showDebug && item.score !== undefined && (
+                      <span className="text-xs px-2 py-0.5 bg-destructive/10 text-destructive rounded font-mono">Score: {item.score}</span>
+                    )}
                   </div>
                 </div>
                 {item.dbId && onFeedbackChange && (

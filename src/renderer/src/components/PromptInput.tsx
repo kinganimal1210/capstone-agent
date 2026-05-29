@@ -15,12 +15,7 @@ interface PromptInputProps {
   onPromptChange: (prompt: string) => void
 }
 
-export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps) {
-  const [prompt, setPrompt] = useState(() => localStorage.getItem('dashboardPrompt') || '')
-
-  useEffect(() => {
-    localStorage.setItem('dashboardPrompt', prompt)
-  }, [prompt])
+export function PromptInput({ onSubmit, disabled, isLoading, prompt, onPromptChange }: PromptInputProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()

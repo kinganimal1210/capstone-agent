@@ -61,9 +61,7 @@ declare global {
       getDocuments: (projectId: number) => Promise<Record<string, unknown>[]>
       deleteDocument: (id: number) => Promise<boolean>
       deleteAllDocuments: (projectId: number) => Promise<number>
-      readDocumentContent: (filePath: string) => Promise<{ data: string | null; error: string | null }>
-      selectDocumentFiles: () => Promise<{ filePaths: string[] | null }>
-      addDocumentFiles: (data: { projectId: number; filePaths: string[] }) => Promise<{ error: string | null; count: number }>
+      readDocumentContent: (filePath: string) => Promise<{ error: string | null; content: string | null; binary?: boolean; info?: string }>
 
       // 질의
       query: (request: { projectId: number; sources: string[]; tool: string; prompt: string }) => Promise<{

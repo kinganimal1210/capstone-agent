@@ -28,7 +28,13 @@ export function getDB(): Database {
  * DB 파일 경로를 반환합니다.
  */
 function getDBPath(): string {
-  return path.join(app.getPath('userData'), 'capstone-agent.db')
+  if (app) {
+    return path.join(app.getPath('userData'), 'capstone-agent.db')
+  }
+  // Fallback for CLI scripts (Electron의 userData 경로와 일치시키기 위함)
+  const appData = process.env.APPDATA 
+    || (process.platform === 'darwin' ? path.join(process.env.HOME || '', 'Library/Application Support') : path.join(process.env.HOME || '', '.config'))
+  return path.join(appData, 'capstone-agent', 'capstone-agent.db')
 }
 
 /**
