@@ -434,7 +434,7 @@ export function buildContext(
   const overlap = options?.overlap ?? DEFAULT_OVERLAP
   const topK = options?.topK ?? DEFAULT_TOP_K
   const maxContextChars = options?.maxContextChars ?? DEFAULT_MAX_CONTEXT_CHARS
-  const scoreThreshold = options?.scoreThreshold ?? 0.5
+  const scoreThreshold = options?.scoreThreshold ?? 0.2
   const scoringWeights = options?.scoringWeights ?? DEFAULT_SCORING_WEIGHTS
 
   // Step 1: 모든 소스를 청크로 분할
