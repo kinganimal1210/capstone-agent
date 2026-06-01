@@ -333,7 +333,8 @@ export function scoreChunk(
     positionBonus: 0,
     titleMatch: 0,
     firstChunkBonus: 0,
-    sourceTypeBonus: 0
+    meetingBonus: 0,
+    taskBonus: 0
   }
   const textLower = chunk.text.toLowerCase()
   const titleLower = chunk.sourceTitle.toLowerCase()
@@ -377,15 +378,15 @@ export function scoreChunk(
     scoredBase += weights.wFirstChunk
   }
 
-  // 소스 타입별 가중치
+  // 소스 타입별 가중치 (meeting/task 각각 독립 추적)
   let score = scoredBase
   if (chunk.sourceType === 'meeting') {
     score *= weights.wMeetingType
-    features.sourceTypeBonus = 1
+    features.meetingBonus = 1
   }
   if (chunk.sourceType === 'task') {
     score *= weights.wTaskType
-    features.sourceTypeBonus = 1
+    features.taskBonus = 1
   }
 
   return {
@@ -396,7 +397,8 @@ export function scoreChunk(
       positionBonus: Math.round(features.positionBonus * 100) / 100,
       titleMatch: Math.round(features.titleMatch * 100) / 100,
       firstChunkBonus: Math.round(features.firstChunkBonus * 100) / 100,
-      sourceTypeBonus: Math.round(features.sourceTypeBonus * 100) / 100
+      meetingBonus: features.meetingBonus,
+      taskBonus: features.taskBonus
     }
   }
 }

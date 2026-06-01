@@ -221,7 +221,8 @@ export interface ChunkFeatures {
   positionBonus: number
   titleMatch: number
   firstChunkBonus: number
-  sourceTypeBonus: number
+  meetingBonus: number
+  taskBonus: number
 }
 
 export interface ScoredChunk {

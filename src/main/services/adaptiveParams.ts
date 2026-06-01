@@ -203,8 +203,8 @@ export function updateWeightsFromFeedback(
     updateWeight(current, 'wPositionBonus', 'wPositionBonus_n', direction, item.features.positionBonus)
     updateWeight(current, 'wTitleMatch', 'wTitleMatch_n', direction, item.features.titleMatch)
     updateWeight(current, 'wFirstChunk', 'wFirstChunk_n', direction, item.features.firstChunkBonus)
-    updateWeight(current, 'wMeetingType', 'wMeetingType_n', direction, item.features.sourceTypeBonus)
-    updateWeight(current, 'wTaskType', 'wTaskType_n', direction, item.features.sourceTypeBonus)
+    updateWeight(current, 'wMeetingType', 'wMeetingType_n', direction, item.features.meetingBonus)
+    updateWeight(current, 'wTaskType',    'wTaskType_n',    direction, item.features.taskBonus)
   }
 
   scoringWeightsRepository.upsert(userId, questionType, current)
