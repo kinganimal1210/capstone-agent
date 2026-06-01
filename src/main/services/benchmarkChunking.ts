@@ -223,9 +223,9 @@ async function main() {
   const chunkBack: Chunk = { sourceType: 'meeting', sourceId: 1, sourceTitle: '무관한 회의', text: '기타 논의 사항... 그 외 여러 내용... 이영희가 마지막에 잠깐 언급함', chunkIndex: 3, score: 0 }
 
   const oldFront = OLD_scoreChunk(chunkFront, keywords)
-  const newFront = scoreChunk(chunkFront, keywords)
+  const newFront = scoreChunk(chunkFront, keywords).score
   const oldBack  = OLD_scoreChunk(chunkBack, keywords)
-  const newBack  = scoreChunk(chunkBack, keywords)
+  const newBack  = scoreChunk(chunkBack, keywords).score
 
   console.log('\n  상황: 같은 키워드("이영희", "토큰", "비용")로 두 청크 비교')
   console.log(`\n  청크 A (앞부분 등장 + 제목 매칭):`)

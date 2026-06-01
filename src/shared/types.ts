@@ -206,7 +206,53 @@ export interface GitRepoInfo {
 
 export type QuestionLength = 'short' | 'long'
 export type QuestionComplexity = 'simple' | 'complex'
-export type QuestionType = 'short_simple' | 'short_complex' | 'long_simple' | 'long_complex'
+export type QuestionDomain = 'git' | 'meeting' | 'document' | 'mixed'
+export type QuestionType =
+  | 'short_simple_git' | 'short_simple_meeting' | 'short_simple_document' | 'short_simple_mixed'
+  | 'short_complex_git' | 'short_complex_meeting' | 'short_complex_document' | 'short_complex_mixed'
+  | 'long_simple_git' | 'long_simple_meeting' | 'long_simple_document' | 'long_simple_mixed'
+  | 'long_complex_git' | 'long_complex_meeting' | 'long_complex_document' | 'long_complex_mixed'
+
+// ── 스코어링 특징/가중치 ───────────────────────────────────────
+
+export interface ChunkFeatures {
+  keywordBase: number
+  freqBonus: number
+  positionBonus: number
+  titleMatch: number
+  firstChunkBonus: number
+  sourceTypeBonus: number
+}
+
+export interface ScoredChunk {
+  sourceType: 'meeting' | 'task' | 'document' | 'git'
+  sourceId: number | string
+  sourceTitle: string
+  text: string
+  chunkIndex: number
+  score: number
+  features: ChunkFeatures
+}
+
+export interface ScoringWeights {
+  wKeywordBase: number
+  wFreqBonus: number
+  wPositionBonus: number
+  wTitleMatch: number
+  wFirstChunk: number
+  wMeetingType: number
+  wTaskType: number
+}
+
+export interface BayesianWeights extends ScoringWeights {
+  wKeywordBase_n: number
+  wFreqBonus_n: number
+  wPositionBonus_n: number
+  wTitleMatch_n: number
+  wFirstChunk_n: number
+  wMeetingType_n: number
+  wTaskType_n: number
+}
 
 // ── Evidence 피드백 ─────────────────────────────────────────────
 
@@ -218,6 +264,7 @@ export interface EvidenceFeedbackRequest {
   evidenceLogId: number
   feedback: EvidenceFeedbackType
   questionType: QuestionType
+  chunkFeatures?: ChunkFeatures
 }
 
 // ── 청킹 파라미터 ───────────────────────────────────────────────

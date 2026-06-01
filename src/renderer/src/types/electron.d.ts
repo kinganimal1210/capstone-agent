@@ -73,8 +73,8 @@ declare global {
         userId: string; queryLogId: number; evidenceLogId: number; feedback: 'interested' | 'not_interested'; questionType: string
       }) => Promise<{ success: boolean }>
       submitAllEvidenceFeedback: (data: {
-        userId: string; queryLogId: number; questionType: string; feedbacks: { evidenceLogId: number; feedback: 'interested' | 'not_interested' }[]; totalEvidenceCount: number
-      }) => Promise<{ success: boolean; updatedParams: any }>
+        userId: string; queryLogId: number; questionType: string; feedbacks: { evidenceLogId: number; feedback: 'interested' | 'not_interested'; chunkFeatures?: unknown }[]; totalEvidenceCount: number
+      }) => Promise<{ success: boolean; updatedParams: any; updatedWeights?: any }>
       getAdaptiveParams: (userId: string) => Promise<Record<string, unknown>[]>
 
       // 설정

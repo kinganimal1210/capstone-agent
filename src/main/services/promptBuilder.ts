@@ -9,6 +9,7 @@
 
 import { preprocessPrompt } from './promptPreprocessor'
 import { buildContext, estimateTokens, type ContextBuildResult } from './contextChunker'
+import type { ScoringWeights } from '../../shared/types'
 
 // ── 시스템 프롬프트 템플릿 ───────────────────────────────────────
 // 간결한 지시로 토큰 절약 (불필요한 수식어 제거)
@@ -67,6 +68,8 @@ export interface PromptBuildInput {
     overlap?: number
     topK?: number
     maxContextChars?: number
+    scoreThreshold?: number
+    scoringWeights?: ScoringWeights
   }
 }
 

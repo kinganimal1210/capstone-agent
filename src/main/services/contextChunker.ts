@@ -6,6 +6,8 @@
  * 총 크기를 제한하여 토큰 사용량을 최적화합니다.
  */
 
+import type { ChunkFeatures, ScoredChunk, ScoringWeights } from '../../shared/types'
+
 // ── 토큰 추정 함수 ──────────────────────────────────────────────
 
 /**
@@ -87,7 +89,7 @@ export interface ContextBuildResult {
   contextBlock: string
 
   /** 선택된 청크 목록 (evidence 로그 저장용) */
-  selectedChunks: Chunk[]
+  selectedChunks: ScoredChunk[]
 
   /** 통계 */
   stats: {
@@ -303,15 +305,37 @@ export function truncate(text: string, maxChars: number): string {
 // ── 핵심 함수: 청크 스코어링 ─────────────────────────────────────
 
 /**
- * 청크와 키워드 목록 간의 관련도 점수를 계산합니다.
+ * 청크와 키워드 목록 간의 관련도 점수 및 특징 기여도를 계산합니다.
  *
  * 스코어링 기준:
  * - 키워드가 청크에 포함되면 기본 1점
  * - 동일 키워드 등장 횟수에 따라 추가 점수 (0.3점/회, 최대 3회)
  * - 청크 앞부분(제목·요약)일수록 가중치 (chunkIndex 0이면 +1점)
  */
-export function scoreChunk(chunk: Chunk, keywords: string[]): number {
-  let score = 0
+const DEFAULT_SCORING_WEIGHTS: ScoringWeights = {
+  wKeywordBase: 1.0,
+  wFreqBonus: 0.3,
+  wPositionBonus: 0.5,
+  wTitleMatch: 0.8,
+  wFirstChunk: 1.0,
+  wMeetingType: 1.2,
+  wTaskType: 1.1
+}
+
+export function scoreChunk(
+  chunk: Chunk,
+  keywords: string[],
+  weights: ScoringWeights = DEFAULT_SCORING_WEIGHTS
+): { score: number; features: ChunkFeatures } {
+  let baseScore = 0
+  const features: ChunkFeatures = {
+    keywordBase: 0,
+    freqBonus: 0,
+    positionBonus: 0,
+    titleMatch: 0,
+    firstChunkBonus: 0,
+    sourceTypeBonus: 0
+  }
   const textLower = chunk.text.toLowerCase()
   const titleLower = chunk.sourceTitle.toLowerCase()
 
@@ -319,37 +343,62 @@ export function scoreChunk(chunk: Chunk, keywords: string[]): number {
     const kwLower = keyword.toLowerCase()
     if (textLower.includes(kwLower)) {
       // 기본 매칭 점수
-      score += 1
+      features.keywordBase += weights.wKeywordBase
+      baseScore += weights.wKeywordBase
 
       // 등장 횟수 보너스 (최대 3회까지)
       const regex = new RegExp(kwLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
       const matches = chunk.text.match(regex)
       if (matches && matches.length > 1) {
-        score += Math.min(matches.length - 1, 3) * 0.3
+        const freqBonus = Math.min(matches.length - 1, 3) * weights.wFreqBonus
+        features.freqBonus += freqBonus
+        baseScore += freqBonus
       }
 
       // [개선 #3] 키워드가 청크 앞부분(20% 이내)에 등장하면 위치 보너스
       const position = textLower.indexOf(kwLower) / Math.max(chunk.text.length, 1)
-      if (position < 0.2) score += 0.5
+      if (position < 0.2) {
+        features.positionBonus += weights.wPositionBonus
+        baseScore += weights.wPositionBonus
+      }
     }
 
     // [개선 #3] 소스 제목에 키워드가 포함되면 추가 보너스
     // 제목 매칭은 강한 관련성 신호이므로 본문 매칭보다 높은 가중치 부여
     if (titleLower.includes(kwLower)) {
-      score += 0.8
+      features.titleMatch += weights.wTitleMatch
+      baseScore += weights.wTitleMatch
     }
   }
 
   // 첫 번째 청크 보너스 (보통 제목·요약이 포함됨) - 단, 키워드 매칭이 성공한 경우에만 부여
-  if (chunk.chunkIndex === 0 && score > 0) {
-    score += 1
+  if (chunk.chunkIndex === 0 && baseScore > 0) {
+    features.firstChunkBonus += weights.wFirstChunk
+    baseScore += weights.wFirstChunk
   }
 
   // 소스 타입별 가중치
-  if (chunk.sourceType === 'meeting') score *= 1.2
-  if (chunk.sourceType === 'task') score *= 1.1
+  let score = baseScore
+  if (chunk.sourceType === 'meeting') {
+    score *= weights.wMeetingType
+    features.sourceTypeBonus = score - baseScore
+  }
+  if (chunk.sourceType === 'task') {
+    score *= weights.wTaskType
+    features.sourceTypeBonus = score - baseScore
+  }
 
-  return Math.round(score * 100) / 100
+  return {
+    score: Math.round(score * 100) / 100,
+    features: {
+      keywordBase: Math.round(features.keywordBase * 100) / 100,
+      freqBonus: Math.round(features.freqBonus * 100) / 100,
+      positionBonus: Math.round(features.positionBonus * 100) / 100,
+      titleMatch: Math.round(features.titleMatch * 100) / 100,
+      firstChunkBonus: Math.round(features.firstChunkBonus * 100) / 100,
+      sourceTypeBonus: Math.round(features.sourceTypeBonus * 100) / 100
+    }
+  }
 }
 
 // ── 핵심 함수: 컨텍스트 조립 ─────────────────────────────────────
@@ -375,15 +424,19 @@ export function buildContext(
     overlap?: number
     topK?: number
     maxContextChars?: number
+    scoreThreshold?: number
+    scoringWeights?: ScoringWeights
   }
 ): ContextBuildResult {
   const chunkSize = options?.chunkSize ?? DEFAULT_CHUNK_SIZE
   const overlap = options?.overlap ?? DEFAULT_OVERLAP
   const topK = options?.topK ?? DEFAULT_TOP_K
   const maxContextChars = options?.maxContextChars ?? DEFAULT_MAX_CONTEXT_CHARS
+  const scoreThreshold = options?.scoreThreshold ?? 0.5
+  const scoringWeights = options?.scoringWeights ?? DEFAULT_SCORING_WEIGHTS
 
   // Step 1: 모든 소스를 청크로 분할
-  const allChunks: Chunk[] = []
+  const allChunks: ScoredChunk[] = []
 
   for (const source of sources) {
     // [개선 #5] 소스 타입을 chunkText에 전달해 타입별 최적 청킹 전략 사용
@@ -400,22 +453,24 @@ export function buildContext(
       }
 
       // Step 2: 키워드 기반 스코어링
-      chunk.score = scoreChunk(chunk, keywords)
-      allChunks.push(chunk)
+      const scored = scoreChunk(chunk, keywords, scoringWeights)
+      allChunks.push({
+        ...chunk,
+        score: scored.score,
+        features: scored.features
+      })
     }
   }
 
   // Step 3: 점수순 정렬 → Top-K 선택
   allChunks.sort((a, b) => b.score - a.score)
 
-  const selected: Chunk[] = []
+  const selected: ScoredChunk[] = []
   let totalChars = 0
 
   for (const chunk of allChunks) {
     if (selected.length >= topK) break
-    // [개선 #1] break → continue: score=0인 청크가 있어도 이후 청크를 포기하지 않음
-    // 정렬 후 score=0인 청크는 맨 뒤에 몰려있으므로 continue해도 성능 영향 없음
-    if (chunk.score <= 0) continue
+    if (chunk.score < scoreThreshold) continue
     if (totalChars + chunk.text.length > maxContextChars) {
       // 남은 공간에 트런케이션해서 넣을 수 있으면 넣기
       const remaining = maxContextChars - totalChars

@@ -11,7 +11,7 @@
  */
 
 import { estimateTokens } from './contextChunker'
-import type { QuestionType, QuestionLength, QuestionComplexity } from '../../shared/types'
+import type { DataSource, QuestionType, QuestionDomain, QuestionLength, QuestionComplexity } from '../../shared/types'
 
 // ── 설정 상수 ────────────────────────────────────────────────────
 
@@ -86,17 +86,31 @@ export function classifyComplexity(question: string): QuestionComplexity {
 // ── 통합 분류 ────────────────────────────────────────────────────
 
 /**
- * 질문을 4가지 유형 중 하나로 분류합니다.
+ * 질문을 길이, 복잡도, 선택 데이터 소스 도메인 기준으로 분류합니다.
  *
  * @example
- * classifyQuestion("현재 태스크 알려줘")
- * // → 'short_simple'
+ * classifyQuestion("현재 태스크 알려줘", ['tasks'])
+ * // → 'short_simple_document'
  *
  * classifyQuestion("지난 3주간 커밋 분석해서 팀원별 기여도 비교하고 병목 파악해줘")
  * // → 'long_complex'
  */
-export function classifyQuestion(question: string): QuestionType {
+export function classifyQuestion(question: string, sources: DataSource[] = []): QuestionType {
   const length = classifyLength(question)
   const complexity = classifyComplexity(question)
-  return `${length}_${complexity}` as QuestionType
+
+  let domain: QuestionDomain
+  if (sources.length === 1) {
+    const map: Record<DataSource, QuestionDomain> = {
+      git: 'git',
+      meetings: 'meeting',
+      documents: 'document',
+      tasks: 'document'
+    }
+    domain = map[sources[0]]
+  } else {
+    domain = 'mixed'
+  }
+
+  return `${length}_${complexity}_${domain}` as QuestionType
 }

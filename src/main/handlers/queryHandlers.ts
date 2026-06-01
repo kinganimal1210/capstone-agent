@@ -5,7 +5,7 @@ import { buildChatMessages, type PromptBuildInput } from '../services/promptBuil
 import { callLLM, loadConfigFromEnv, LLMConfig, LLMProvider } from '../services/llmService'
 import { getRecentCommits, getRepoInfo, isValidGitRepo } from '../services/gitService'
 import { classifyQuestion } from '../services/questionClassifier'
-import { getParams, updateParamsFromBatch } from '../services/adaptiveParams'
+import { getParams, getWeights, updateParamsFromBatch, updateWeightsFromFeedback } from '../services/adaptiveParams'
 import { preprocessPrompt } from '../services/promptPreprocessor'
 import { getResolvedLLMSettings } from '../services/settingsService'
 import * as dotenv from 'dotenv'
@@ -199,7 +199,8 @@ function saveQueryLogs(
       source: chunk.sourceType as any,
       title: chunk.sourceTitle,
       content: chunk.text,
-      score: chunk.score
+      score: chunk.score,
+      metadata: JSON.stringify({ features: chunk.features })
     })
     return {
       id: `${chunk.sourceType}-${chunk.sourceId}`,
@@ -207,7 +208,8 @@ function saveQueryLogs(
       source: chunk.sourceType as any,
       title: chunk.sourceTitle,
       content: chunk.text,
-      score: chunk.score
+      score: chunk.score,
+      metadata: { features: chunk.features }
     }
   })
 
@@ -245,15 +247,19 @@ export function registerQueryHandlers(ipcMain: IpcMain): void {
       const { sources, debugData } = collectSources(request, projectGitPath)
 
       // 3. 질문 유형 분류 + 적응형 파라미터 조회
-      const questionType = classifyQuestion(request.prompt)
+      const questionType = classifyQuestion(request.prompt, request.sources)
       const userId = (request as any).userId ?? 'default'
       const adaptiveContextOptions = getParams(userId, questionType)
+      const scoringWeights = getWeights(userId, questionType)
 
       // 4. RAG 파이프라인 (프롬프트 & 컨텍스트 빌드)
       const { messages, contextResult } = buildChatMessages({
         userQuestion: request.prompt,
         sources,
-        contextOptions: adaptiveContextOptions
+        contextOptions: {
+          ...adaptiveContextOptions,
+          scoringWeights
+        }
       })
 
       // 5. LLM 호출
@@ -277,10 +283,12 @@ export function registerQueryHandlers(ipcMain: IpcMain): void {
             retrievedChunks: debugData.retrievedChunks.length,
             searchMode: debugData.searchMode,
             contextChars: contextResult.stats.totalChars,
+            scoringWeights,
             selectedChunks: contextResult.selectedChunks.map(c => ({
               rank: c.score,
               fileName: c.sourceTitle.split(' (')[0],
-              title: c.sourceTitle
+              title: c.sourceTitle,
+              features: c.features
             }))
           } 
         }
@@ -315,7 +323,8 @@ export function registerQueryHandlers(ipcMain: IpcMain): void {
       data.queryLogId,
       data.evidenceLogId,
       data.feedback,
-      data.questionType
+      data.questionType,
+      data.chunkFeatures
     )
     return { success: true }
   })
@@ -325,7 +334,7 @@ export function registerQueryHandlers(ipcMain: IpcMain): void {
     userId: string
     queryLogId: number
     questionType: import('../../shared/types').QuestionType
-    feedbacks: { evidenceLogId: number; feedback: import('../../shared/types').EvidenceFeedbackType }[]
+    feedbacks: { evidenceLogId: number; feedback: import('../../shared/types').EvidenceFeedbackType; chunkFeatures?: import('../../shared/types').ChunkFeatures }[]
     totalEvidenceCount: number
   }) => {
     for (const item of data.feedbacks) {
@@ -334,7 +343,8 @@ export function registerQueryHandlers(ipcMain: IpcMain): void {
         data.queryLogId,
         item.evidenceLogId,
         item.feedback,
-        data.questionType
+        data.questionType,
+        item.chunkFeatures
       )
     }
 
@@ -345,8 +355,17 @@ export function registerQueryHandlers(ipcMain: IpcMain): void {
       feedbackTypes,
       data.totalEvidenceCount
     )
+    const updatedWeights = updateWeightsFromFeedback(
+      data.userId,
+      data.questionType,
+      data.feedbacks.map((item) => ({
+        feedback: item.feedback,
+        features: item.chunkFeatures
+      })),
+      data.totalEvidenceCount
+    )
 
-    return { success: true, updatedParams }
+    return { success: true, updatedParams, updatedWeights }
   })
 
   // 사용자 파라미터 조회

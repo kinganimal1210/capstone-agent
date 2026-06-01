@@ -14,17 +14,57 @@
  *   → score = 0: 변경 없음
  */
 
-import type { QuestionType, ChunkingParams, EvidenceFeedbackType } from '../../shared/types'
-import { adaptiveParamsRepository } from '../database/repositories'
+import type {
+  BayesianWeights,
+  ChunkFeatures,
+  ChunkingParams,
+  EvidenceFeedbackType,
+  QuestionType,
+  ScoringWeights
+} from '../../shared/types'
+import { adaptiveParamsRepository, scoringWeightsRepository } from '../database/repositories'
 
 // ── 기본값 ───────────────────────────────────────────────────────
 
 /** 질문 유형별 초기 기본 파라미터 */
 const DEFAULT_PARAMS: Record<QuestionType, ChunkingParams> = {
-  short_simple:  { chunkSize: 400, overlap: 60,  topK: 3, maxContextChars: 2000 },
-  short_complex: { chunkSize: 500, overlap: 80,  topK: 5, maxContextChars: 3000 },
-  long_simple:   { chunkSize: 500, overlap: 60,  topK: 4, maxContextChars: 2500 },
-  long_complex:  { chunkSize: 600, overlap: 100, topK: 7, maxContextChars: 4000 },
+  short_simple_git: { chunkSize: 400, overlap: 60, topK: 3, maxContextChars: 2000 },
+  short_simple_meeting: { chunkSize: 400, overlap: 60, topK: 3, maxContextChars: 2000 },
+  short_simple_document: { chunkSize: 400, overlap: 60, topK: 3, maxContextChars: 2000 },
+  short_simple_mixed: { chunkSize: 400, overlap: 60, topK: 3, maxContextChars: 2000 },
+  short_complex_git: { chunkSize: 500, overlap: 80, topK: 5, maxContextChars: 3000 },
+  short_complex_meeting: { chunkSize: 500, overlap: 80, topK: 5, maxContextChars: 3000 },
+  short_complex_document: { chunkSize: 500, overlap: 80, topK: 5, maxContextChars: 3000 },
+  short_complex_mixed: { chunkSize: 500, overlap: 80, topK: 5, maxContextChars: 3000 },
+  long_simple_git: { chunkSize: 500, overlap: 60, topK: 4, maxContextChars: 2500 },
+  long_simple_meeting: { chunkSize: 500, overlap: 60, topK: 4, maxContextChars: 2500 },
+  long_simple_document: { chunkSize: 500, overlap: 60, topK: 4, maxContextChars: 2500 },
+  long_simple_mixed: { chunkSize: 500, overlap: 60, topK: 4, maxContextChars: 2500 },
+  long_complex_git: { chunkSize: 600, overlap: 100, topK: 7, maxContextChars: 4000 },
+  long_complex_meeting: { chunkSize: 600, overlap: 100, topK: 7, maxContextChars: 4000 },
+  long_complex_document: { chunkSize: 600, overlap: 100, topK: 7, maxContextChars: 4000 },
+  long_complex_mixed: { chunkSize: 600, overlap: 100, topK: 7, maxContextChars: 4000 },
+}
+
+export const DEFAULT_WEIGHTS: ScoringWeights = {
+  wKeywordBase: 1.0,
+  wFreqBonus: 0.3,
+  wPositionBonus: 0.5,
+  wTitleMatch: 0.8,
+  wFirstChunk: 1.0,
+  wMeetingType: 1.2,
+  wTaskType: 1.1
+}
+
+const DEFAULT_BAYESIAN_WEIGHTS: BayesianWeights = {
+  ...DEFAULT_WEIGHTS,
+  wKeywordBase_n: 0,
+  wFreqBonus_n: 0,
+  wPositionBonus_n: 0,
+  wTitleMatch_n: 0,
+  wFirstChunk_n: 0,
+  wMeetingType_n: 0,
+  wTaskType_n: 0
 }
 
 // ── 파라미터 범위 제한 ───────────────────────────────────────────
@@ -34,6 +74,16 @@ const PARAM_BOUNDS = {
   overlap:         { min: 20,   max: 200 },
   topK:            { min: 1,    max: 15 },
   maxContextChars: { min: 1000, max: 8000 },
+}
+
+const WEIGHT_BOUNDS = {
+  wKeywordBase: { min: 0.1, max: 3.0 },
+  wFreqBonus: { min: 0.0, max: 1.0 },
+  wPositionBonus: { min: 0.0, max: 1.5 },
+  wTitleMatch: { min: 0.1, max: 2.0 },
+  wFirstChunk: { min: 0.0, max: 2.0 },
+  wMeetingType: { min: 0.8, max: 2.0 },
+  wTaskType: { min: 0.8, max: 1.8 },
 }
 
 /** 학습률 */
@@ -57,14 +107,21 @@ export function getParams(userId: string, questionType: QuestionType): ChunkingP
     }
   }
 
-  return { ...DEFAULT_PARAMS[questionType] }
+  return { ...getDefaultParams(questionType) }
 }
 
 /**
  * 기본 파라미터를 반환합니다. (비교/로그용)
  */
 export function getDefaultParams(questionType: QuestionType): ChunkingParams {
-  return { ...DEFAULT_PARAMS[questionType] }
+  const fallbackMap: Record<string, QuestionType> = {
+    short_simple: 'short_simple_mixed',
+    short_complex: 'short_complex_mixed',
+    long_simple: 'long_simple_mixed',
+    long_complex: 'long_complex_mixed'
+  }
+  const normalizedType = (DEFAULT_PARAMS[questionType] ? questionType : fallbackMap[questionType]) ?? 'short_simple_mixed'
+  return { ...DEFAULT_PARAMS[normalizedType] }
 }
 
 /**
@@ -72,6 +129,80 @@ export function getDefaultParams(questionType: QuestionType): ChunkingParams {
  */
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
+}
+
+function signedDelta(value: number, score: number): number {
+  const raw = Math.abs(LEARNING_RATE * score * value)
+  const delta = Math.max(1, Math.round(raw))
+  return score > 0 ? delta : -delta
+}
+
+function toScoringWeights(weights: BayesianWeights): ScoringWeights {
+  return {
+    wKeywordBase: weights.wKeywordBase,
+    wFreqBonus: weights.wFreqBonus,
+    wPositionBonus: weights.wPositionBonus,
+    wTitleMatch: weights.wTitleMatch,
+    wFirstChunk: weights.wFirstChunk,
+    wMeetingType: weights.wMeetingType,
+    wTaskType: weights.wTaskType
+  }
+}
+
+export function getWeights(userId: string, questionType: QuestionType): ScoringWeights {
+  const saved = scoringWeightsRepository.getByUserAndType(userId, questionType)
+  return saved ? toScoringWeights(saved) : { ...DEFAULT_WEIGHTS }
+}
+
+function updateWeight(
+  current: BayesianWeights,
+  key: keyof ScoringWeights,
+  nKey: keyof Pick<
+    BayesianWeights,
+    'wKeywordBase_n' | 'wFreqBonus_n' | 'wPositionBonus_n' | 'wTitleMatch_n' |
+    'wFirstChunk_n' | 'wMeetingType_n' | 'wTaskType_n'
+  >,
+  signal: number
+): void {
+  if (signal === 0) return
+  const n = current[nKey]
+  const next = ((current[key] * n) + signal) / (n + 1)
+  const bounds = WEIGHT_BOUNDS[key]
+  current[key] = Math.round(clamp(next, bounds.min, bounds.max) * 1000) / 1000
+  current[nKey] = n + 1
+}
+
+export function updateWeightsFromFeedback(
+  userId: string,
+  questionType: QuestionType,
+  feedbackItems: {
+    feedback: EvidenceFeedbackType
+    features?: ChunkFeatures | null
+  }[],
+  totalEvidenceCount: number
+): ScoringWeights {
+  void totalEvidenceCount
+  const current = {
+    ...DEFAULT_BAYESIAN_WEIGHTS,
+    ...(scoringWeightsRepository.getByUserAndType(userId, questionType) ?? {})
+  }
+
+  for (const item of feedbackItems) {
+    if (!item.features) continue
+
+    const direction = item.feedback === 'interested' ? 1 : -1
+
+    updateWeight(current, 'wKeywordBase', 'wKeywordBase_n', item.features.keywordBase * direction)
+    updateWeight(current, 'wFreqBonus', 'wFreqBonus_n', item.features.freqBonus * direction)
+    updateWeight(current, 'wPositionBonus', 'wPositionBonus_n', item.features.positionBonus * direction)
+    updateWeight(current, 'wTitleMatch', 'wTitleMatch_n', item.features.titleMatch * direction)
+    updateWeight(current, 'wFirstChunk', 'wFirstChunk_n', item.features.firstChunkBonus * direction)
+    updateWeight(current, 'wMeetingType', 'wMeetingType_n', item.features.sourceTypeBonus * direction)
+    updateWeight(current, 'wTaskType', 'wTaskType_n', item.features.sourceTypeBonus * direction)
+  }
+
+  scoringWeightsRepository.upsert(userId, questionType, current)
+  return toScoringWeights(current)
 }
 
 /**
@@ -117,12 +248,12 @@ export function updateParamsFromBatch(
   // score > 0: 확대 (topK↑, maxContextChars↑)
   // score < 0: 축소 (topK↓, maxContextChars↓, overlap↑)
   current.topK = clamp(
-    Math.round(current.topK + α * score * current.topK),
+    current.topK + signedDelta(current.topK, score),
     PARAM_BOUNDS.topK.min,
     PARAM_BOUNDS.topK.max
   )
   current.maxContextChars = clamp(
-    Math.round(current.maxContextChars + α * score * current.maxContextChars),
+    current.maxContextChars + signedDelta(current.maxContextChars, score),
     PARAM_BOUNDS.maxContextChars.min,
     PARAM_BOUNDS.maxContextChars.max
   )
@@ -130,7 +261,7 @@ export function updateParamsFromBatch(
   // 부정 피드백 비율이 높을 때만 overlap 증가 (정밀도 향상)
   if (score < 0) {
     current.overlap = clamp(
-      Math.round(current.overlap + α * Math.abs(score) * current.overlap),
+      current.overlap + Math.max(1, Math.round(α * Math.abs(score) * current.overlap)),
       PARAM_BOUNDS.overlap.min,
       PARAM_BOUNDS.overlap.max
     )
@@ -141,4 +272,3 @@ export function updateParamsFromBatch(
 
   return current
 }
-

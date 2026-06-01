@@ -118,6 +118,53 @@ export const migrations: Migration[] = [
       `)
     }
   },
+  {
+    version: 'V005',
+    description: '사용자별 스코어링 가중치 및 evidence 특징 저장 컬럼 추가',
+    up: (db) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS user_scoring_weights (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id TEXT NOT NULL,
+          question_type TEXT NOT NULL,
+          w_keyword_base REAL NOT NULL DEFAULT 1.0,
+          w_keyword_base_n INTEGER NOT NULL DEFAULT 0,
+          w_freq_bonus REAL NOT NULL DEFAULT 0.3,
+          w_freq_bonus_n INTEGER NOT NULL DEFAULT 0,
+          w_position_bonus REAL NOT NULL DEFAULT 0.5,
+          w_position_bonus_n INTEGER NOT NULL DEFAULT 0,
+          w_title_match REAL NOT NULL DEFAULT 0.8,
+          w_title_match_n INTEGER NOT NULL DEFAULT 0,
+          w_first_chunk REAL NOT NULL DEFAULT 1.0,
+          w_first_chunk_n INTEGER NOT NULL DEFAULT 0,
+          w_meeting_type REAL NOT NULL DEFAULT 1.2,
+          w_meeting_type_n INTEGER NOT NULL DEFAULT 0,
+          w_task_type REAL NOT NULL DEFAULT 1.1,
+          w_task_type_n INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(user_id, question_type)
+        )
+      `)
+
+      db.run('CREATE INDEX IF NOT EXISTS idx_user_scoring_weights_user ON user_scoring_weights(user_id)')
+
+      let hasChunkFeatures = false
+      const stmt = db.prepare('PRAGMA table_info(evidence_feedback)')
+      while (stmt.step()) {
+        const row = stmt.getAsObject() as { name: string }
+        if (row.name === 'chunk_features') {
+          hasChunkFeatures = true
+          break
+        }
+      }
+      stmt.free()
+
+      if (!hasChunkFeatures) {
+        db.run('ALTER TABLE evidence_feedback ADD COLUMN chunk_features TEXT')
+      }
+    }
+  },
 ]
 
 // ── 마이그레이션 엔진 ────────────────────────────────────────────

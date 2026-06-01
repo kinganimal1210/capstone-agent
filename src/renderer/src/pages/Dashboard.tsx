@@ -89,7 +89,8 @@ export function Dashboard() {
           source: e.source,
           title: e.title,
           snippet: e.content,
-          score: e.score
+          score: e.score,
+          chunkFeatures: e.metadata?.features
         })),
         suggestedActions: response.suggestedActions || [],
         debugInfo
@@ -127,10 +128,14 @@ export function Dashboard() {
       const questionType = parsed.questionType
       const userId = parsed.userId || 'default'
 
-      const feedbackArray = Object.entries(feedbacks).map(([id, feedback]) => ({
-        evidenceLogId: parseInt(id),
-        feedback
-      }))
+      const feedbackArray = Object.entries(feedbacks).map(([id, feedback]) => {
+        const evidence = results.evidence.find((item) => item.dbId === parseInt(id))
+        return {
+          evidenceLogId: parseInt(id),
+          feedback,
+          chunkFeatures: evidence?.chunkFeatures
+        }
+      })
 
       await window.api.submitAllEvidenceFeedback({
         userId,

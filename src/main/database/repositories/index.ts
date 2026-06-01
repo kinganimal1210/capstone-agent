@@ -11,4 +11,4 @@ export {
   evidenceLogRepository
 } from './queryLogRepository'
 export { documentRepository } from './documentRepository'
-export { adaptiveParamsRepository } from './adaptiveParamsRepository'
+export { adaptiveParamsRepository, scoringWeightsRepository } from './adaptiveParamsRepository'
