@@ -137,13 +137,22 @@ export function Dashboard() {
         }
       })
 
-      await window.api.submitAllEvidenceFeedback({
+      const feedbackResult = await window.api.submitAllEvidenceFeedback({
         userId,
         queryLogId: results.queryLogId,
         questionType,
         feedbacks: feedbackArray,
         totalEvidenceCount: results.evidence.length
       })
+
+      setResults((prev) => ({
+        ...prev,
+        debugInfo: {
+          ...(prev.debugInfo || {}),
+          scoringWeights: feedbackResult.updatedWeights || prev.debugInfo?.scoringWeights,
+          updatedWeights: feedbackResult.updatedWeights
+        }
+      }))
 
       setFeedbackSubmitted(true)
     } catch (e: any) {

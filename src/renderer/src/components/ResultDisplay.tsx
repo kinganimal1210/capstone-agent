@@ -27,6 +27,7 @@ interface ResultDisplayProps {
 
 export function ResultDisplay({ summary, evidence, suggestedActions, feedbacks = {}, onFeedbackChange, debugInfo }: ResultDisplayProps) {
   const [showDebug, setShowDebug] = React.useState(false)
+  const scoringWeights = debugInfo?.updatedWeights || debugInfo?.scoringWeights
 
   return (
     <div className="space-y-6">
@@ -56,6 +57,21 @@ export function ResultDisplay({ summary, evidence, suggestedActions, feedbacks =
         {showDebug && debugInfo && (
           <div className="mt-4 p-4 bg-background/50 border border-border rounded-lg">
             <h4 className="text-sm font-semibold text-foreground mb-2">Debug Information</h4>
+            <div className="mb-4 rounded border border-border bg-card p-3">
+              <h5 className="mb-2 text-xs font-semibold text-foreground">Scoring Weights</h5>
+              {scoringWeights ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs font-mono text-muted-foreground">
+                  {Object.entries(scoringWeights).map(([key, value]) => (
+                    <div key={key} className="flex justify-between gap-3">
+                      <span>{key}</span>
+                      <span>{typeof value === 'number' ? value.toFixed(3) : String(value)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Scoring weights are not available for this result. Run the query again after restarting the dev server.</p>
+              )}
+            </div>
             <div className="text-xs text-muted-foreground font-mono whitespace-pre-wrap">
               {JSON.stringify(debugInfo, null, 2)}
             </div>
