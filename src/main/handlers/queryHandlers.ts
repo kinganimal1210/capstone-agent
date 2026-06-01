@@ -1,4 +1,5 @@
-import { IpcMain } from 'electron'
+import { app, IpcMain } from 'electron'
+import fs from 'fs'
 import { queryLogRepository, aiLogRepository, evidenceLogRepository, meetingRepository, taskRepository, documentRepository, projectRepository, adaptiveParamsRepository, scoringWeightsRepository } from '../database/repositories'
 import type { QueryRequest, QueryResponse, EvidenceFeedbackRequest, ToolType, DataSource, EvidenceItem } from '../../shared/types'
 import { buildChatMessages, type PromptBuildInput } from '../services/promptBuilder'
@@ -21,6 +22,60 @@ const toolRequiredSources: Record<ToolType, DataSource[]> = {
   'cross-source-summary': [],
   'document-search': ['documents'],
   'report-generator': []
+}
+
+interface QueryMetricsLogEntry {
+  timestamp: string
+  queryLogId: number
+  projectId: number
+  tool: ToolType
+  sources: DataSource[]
+  prompt: string
+  status: 'success' | 'error'
+  model?: string
+  provider?: string
+  tokenUsage?: {
+    promptTokens?: number
+    completionTokens?: number
+    totalTokens?: number
+  }
+  llmLatencyMs?: number
+  totalDurationMs: number
+  selectedChunkCount?: number
+  contextChars?: number
+  estimatedTokens?: number
+  error?: string
+}
+
+function getQueryMetricsLogPath(): string {
+  return path.join(app.getPath('userData'), 'query-metrics.log')
+}
+
+function writeQueryMetricsLog(entry: QueryMetricsLogEntry): void {
+  const logLine = JSON.stringify(entry)
+  try {
+    fs.appendFileSync(getQueryMetricsLogPath(), `${logLine}\n`, 'utf-8')
+  } catch (error) {
+    console.error('[QueryMetrics] 로그 파일 저장 실패:', error)
+  }
+
+  const usage = entry.tokenUsage
+  const tokenText = usage
+    ? `${usage.promptTokens ?? '?'}+${usage.completionTokens ?? '?'}=${usage.totalTokens ?? '?'}`
+    : 'unavailable'
+
+  console.log(
+    [
+      `[QueryMetrics] #${entry.queryLogId}`,
+      `status=${entry.status}`,
+      `tool=${entry.tool}`,
+      `sources=${entry.sources.join(',')}`,
+      `tokens=${tokenText}`,
+      `llmLatency=${entry.llmLatencyMs ?? '?'}ms`,
+      `totalDuration=${entry.totalDurationMs}ms`,
+      `prompt="${entry.prompt.replace(/\s+/g, ' ').slice(0, 120)}"`
+    ].join(' | ')
+  )
 }
 
 function validateRequest(request: QueryRequest) {
@@ -266,6 +321,23 @@ export function registerQueryHandlers(ipcMain: IpcMain): void {
       const llmResponse = await executeLLM(messages)
 
       const durationMs = Date.now() - startTime
+      writeQueryMetricsLog({
+        timestamp: new Date().toISOString(),
+        queryLogId,
+        projectId: request.projectId,
+        tool: request.tool,
+        sources: request.sources,
+        prompt: request.prompt,
+        status: 'success',
+        model: llmResponse.model,
+        provider: llmResponse.provider,
+        tokenUsage: llmResponse.usage,
+        llmLatencyMs: llmResponse.latencyMs,
+        totalDurationMs: durationMs,
+        selectedChunkCount: contextResult.stats.selectedChunks,
+        contextChars: contextResult.stats.totalChars,
+        estimatedTokens: contextResult.stats.estimatedTokens
+      })
 
       // 6. 로그 저장 및 응답 반환
       return saveQueryLogs(
@@ -295,6 +367,17 @@ export function registerQueryHandlers(ipcMain: IpcMain): void {
       )
     } catch (error: any) {
       const durationMs = Date.now() - startTime
+      writeQueryMetricsLog({
+        timestamp: new Date().toISOString(),
+        queryLogId,
+        projectId: request.projectId,
+        tool: request.tool,
+        sources: request.sources,
+        prompt: request.prompt,
+        status: 'error',
+        totalDurationMs: durationMs,
+        error: error.message
+      })
       queryLogRepository.updateStatus(queryLogId, 'error', error.message, durationMs)
       throw error
     }
