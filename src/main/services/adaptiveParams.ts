@@ -88,8 +88,8 @@ const WEIGHT_BOUNDS = {
 
 /** 학습률 */
 const LEARNING_RATE = 0.1
-const WEIGHT_LR_POSITIVE = 0.05  // 긍정 피드백: 천천히 올리기
-const WEIGHT_LR_NEGATIVE = 0.03  // 부정 피드백: 더 천천히 내리기 (과잉 수정 방지)
+const WEIGHT_LR_POSITIVE = 0.15  // 긍정 피드백
+const WEIGHT_LR_NEGATIVE = 0.05  // 부정 피드백: 긍정보다 보수적으로 (과잉 수정 방지)
 const MAX_N = 20                  // n 상한선: 이 이상 커지면 시스템이 frozen됨
 
 // ── 핵심 함수 ────────────────────────────────────────────────────
