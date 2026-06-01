@@ -88,7 +88,8 @@ const WEIGHT_BOUNDS = {
 
 /** 학습률 */
 const LEARNING_RATE = 0.1
-const WEIGHT_LEARNING_RATE = 0.2
+const WEIGHT_LR_POSITIVE = 0.05  // 긍정 피드백: 천천히 올리기
+const WEIGHT_LR_NEGATIVE = 0.03  // 부정 피드백: 더 천천히 내리기 (과잉 수정 방지)
 
 // ── 핵심 함수 ────────────────────────────────────────────────────
 
@@ -170,9 +171,11 @@ function updateWeight(
   const n = current[nKey]
   const bounds = WEIGHT_BOUNDS[key]
   const featureStrength = Math.min(1, featureValue / 3)
+  // 긍정/부정 비대칭 학습률: 부정 피드백의 과잉 수정 방지
+  const lr = direction === 1 ? WEIGHT_LR_POSITIVE : WEIGHT_LR_NEGATIVE
   const target =
     current[key] +
-    direction * WEIGHT_LEARNING_RATE * featureStrength * (bounds.max - bounds.min)
+    direction * lr * featureStrength * (bounds.max - bounds.min)
   const next = ((current[key] * n) + clamp(target, bounds.min, bounds.max)) / (n + 1)
   current[key] = Math.round(clamp(next, bounds.min, bounds.max) * 1000) / 1000
   current[nKey] = n + 1
