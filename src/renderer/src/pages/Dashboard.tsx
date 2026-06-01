@@ -7,6 +7,8 @@ import type { DataSource, QueryResponse, ToolType } from '../../../shared/types'
 
 // 삭제 (mockResults)
 
+const DEFAULT_PROJECT_ID = 1
+
 const getInitialDashboardState = () => {
   const saved = localStorage.getItem('dashboardState')
   if (saved) {
@@ -65,10 +67,10 @@ export function Dashboard() {
 
       // API 호출 (기본 프로젝트 ID 1 사용)
       const response = await window.api.query({
-        projectId: 1, 
+        projectId: DEFAULT_PROJECT_ID,
         sources: selectedSources,
         tool: selectedTool || 'report-generator',
-        prompt: prompt
+        prompt: submittedPrompt
       })
       
       let debugInfo = undefined;
