@@ -140,14 +140,15 @@ function signedDelta(value: number, score: number): number {
 }
 
 function toScoringWeights(weights: BayesianWeights): ScoringWeights {
+  // DB에 저장된 값이 현재 bounds 밖일 수 있으므로 읽을 때도 clamp 적용
   return {
-    wKeywordBase: weights.wKeywordBase,
-    wFreqBonus: weights.wFreqBonus,
-    wPositionBonus: weights.wPositionBonus,
-    wTitleMatch: weights.wTitleMatch,
-    wFirstChunk: weights.wFirstChunk,
-    wMeetingType: weights.wMeetingType,
-    wTaskType: weights.wTaskType
+    wKeywordBase: clamp(weights.wKeywordBase, WEIGHT_BOUNDS.wKeywordBase.min, WEIGHT_BOUNDS.wKeywordBase.max),
+    wFreqBonus: clamp(weights.wFreqBonus, WEIGHT_BOUNDS.wFreqBonus.min, WEIGHT_BOUNDS.wFreqBonus.max),
+    wPositionBonus: clamp(weights.wPositionBonus, WEIGHT_BOUNDS.wPositionBonus.min, WEIGHT_BOUNDS.wPositionBonus.max),
+    wTitleMatch: clamp(weights.wTitleMatch, WEIGHT_BOUNDS.wTitleMatch.min, WEIGHT_BOUNDS.wTitleMatch.max),
+    wFirstChunk: clamp(weights.wFirstChunk, WEIGHT_BOUNDS.wFirstChunk.min, WEIGHT_BOUNDS.wFirstChunk.max),
+    wMeetingType: clamp(weights.wMeetingType, WEIGHT_BOUNDS.wMeetingType.min, WEIGHT_BOUNDS.wMeetingType.max),
+    wTaskType: clamp(weights.wTaskType, WEIGHT_BOUNDS.wTaskType.min, WEIGHT_BOUNDS.wTaskType.max),
   }
 }
 
