@@ -77,10 +77,10 @@ const PARAM_BOUNDS = {
 }
 
 const WEIGHT_BOUNDS = {
-  wKeywordBase: { min: 0.1, max: 3.0 },
+  wKeywordBase: { min: 0.5, max: 3.0 },  // 0.1→0.5: 저구간 절벽 효과 방지
   wFreqBonus: { min: 0.0, max: 1.0 },
   wPositionBonus: { min: 0.0, max: 1.5 },
-  wTitleMatch: { min: 0.1, max: 2.0 },
+  wTitleMatch: { min: 0.3, max: 2.0 },   // 0.1→0.3: 제목 매칭도 동일 이유
   wFirstChunk: { min: 0.0, max: 2.0 },
   wMeetingType: { min: 0.8, max: 2.0 },
   wTaskType: { min: 0.8, max: 1.8 },
