@@ -58,6 +58,16 @@ export const adaptiveParamsRepository = {
   },
 
   /**
+   * 유저의 모든 청킹 파라미터를 초기화합니다.
+   */
+  resetUser(userId: string): void {
+    const db = getDB()
+    db.run('DELETE FROM user_chunking_params WHERE user_id = ?', [userId])
+    db.run('DELETE FROM evidence_feedback WHERE user_id = ?', [userId])
+    saveDB()
+  },
+
+  /**
    * Evidence 피드백을 저장합니다.
    */
   createFeedback(
@@ -203,5 +213,14 @@ export const scoringWeightsRepository = {
     }
     stmt.free()
     return rows
+  },
+
+  /**
+   * 유저의 모든 스코어링 가중치를 초기화합니다.
+   */
+  resetUser(userId: string): void {
+    const db = getDB()
+    db.run('DELETE FROM user_scoring_weights WHERE user_id = ?', [userId])
+    saveDB()
   }
 }

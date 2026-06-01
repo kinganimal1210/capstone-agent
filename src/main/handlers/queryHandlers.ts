@@ -1,5 +1,5 @@
 import { IpcMain } from 'electron'
-import { queryLogRepository, aiLogRepository, evidenceLogRepository, meetingRepository, taskRepository, documentRepository, projectRepository, adaptiveParamsRepository } from '../database/repositories'
+import { queryLogRepository, aiLogRepository, evidenceLogRepository, meetingRepository, taskRepository, documentRepository, projectRepository, adaptiveParamsRepository, scoringWeightsRepository } from '../database/repositories'
 import type { QueryRequest, QueryResponse, EvidenceFeedbackRequest, ToolType, DataSource, EvidenceItem } from '../../shared/types'
 import { buildChatMessages, type PromptBuildInput } from '../services/promptBuilder'
 import { callLLM, loadConfigFromEnv, LLMConfig, LLMProvider } from '../services/llmService'
@@ -371,5 +371,12 @@ export function registerQueryHandlers(ipcMain: IpcMain): void {
   // 사용자 파라미터 조회
   ipcMain.handle('adaptive:getParams', (_event, userId: string) => {
     return adaptiveParamsRepository.getAllByUser(userId)
+  })
+
+  // 사용자 학습 데이터 초기화 (청킹 파라미터 + 스코어링 가중치 + 피드백 로그)
+  ipcMain.handle('adaptive:reset', (_event, userId: string) => {
+    adaptiveParamsRepository.resetUser(userId)
+    scoringWeightsRepository.resetUser(userId)
+    return { success: true }
   })
 }

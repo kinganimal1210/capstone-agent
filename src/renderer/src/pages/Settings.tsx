@@ -13,6 +13,23 @@ interface LLMSettingsForm {
 }
 
 export function Settings() {
+  const [isResetting, setIsResetting] = useState(false)
+  const [resetMessage, setResetMessage] = useState('')
+
+  const handleResetLearning = async () => {
+    if (!confirm('학습된 가중치와 파라미터를 모두 초기화할까요? 이 작업은 되돌릴 수 없습니다.')) return
+    setIsResetting(true)
+    setResetMessage('')
+    try {
+      await window.api.resetAdaptiveLearning('default')
+      setResetMessage('학습 데이터가 초기화되었습니다. 다음 질문부터 기본값으로 시작합니다.')
+    } catch (e) {
+      setResetMessage('초기화 중 오류가 발생했습니다.')
+    } finally {
+      setIsResetting(false)
+    }
+  }
+
   const [form, setForm] = useState<LLMSettingsForm>({
     provider: 'openai',
     model: 'gpt-4.1-mini',
@@ -204,6 +221,24 @@ export function Settings() {
             {message}
           </div>
         )}
+
+        {/* 피드백 학습 초기화 */}
+        <div className="bg-card border border-border rounded-lg p-6">
+          <h3 className="text-foreground mb-1">피드백 학습 초기화</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Evidence 피드백으로 학습된 스코어링 가중치와 청킹 파라미터를 기본값으로 되돌립니다.
+          </p>
+          <button
+            onClick={handleResetLearning}
+            disabled={isResetting}
+            className="px-4 py-2 border border-destructive text-destructive rounded-md text-sm hover:bg-destructive/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isResetting ? '초기화 중...' : '학습 데이터 초기화'}
+          </button>
+          {resetMessage && (
+            <p className="text-sm text-muted-foreground mt-3">{resetMessage}</p>
+          )}
+        </div>
 
         <div className="flex justify-end">
           <button

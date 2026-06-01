@@ -90,6 +90,7 @@ const WEIGHT_BOUNDS = {
 const LEARNING_RATE = 0.1
 const WEIGHT_LR_POSITIVE = 0.05  // 긍정 피드백: 천천히 올리기
 const WEIGHT_LR_NEGATIVE = 0.03  // 부정 피드백: 더 천천히 내리기 (과잉 수정 방지)
+const MAX_N = 20                  // n 상한선: 이 이상 커지면 시스템이 frozen됨
 
 // ── 핵심 함수 ────────────────────────────────────────────────────
 
@@ -169,7 +170,7 @@ function updateWeight(
   featureValue: number
 ): void {
   if (featureValue <= 0) return
-  const n = current[nKey]
+  const n = Math.min(current[nKey], MAX_N)  // n 상한선 적용
   const bounds = WEIGHT_BOUNDS[key]
   const featureStrength = Math.min(1, featureValue / 3)
   // 긍정/부정 비대칭 학습률: 부정 피드백의 과잉 수정 방지

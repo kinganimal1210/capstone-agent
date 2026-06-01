@@ -78,6 +78,7 @@ contextBridge.exposeInMainWorld('api', {
   submitEvidenceFeedback: (data: any) => ipcRenderer.invoke('evidence:feedback', data),
   submitAllEvidenceFeedback: (data: any) => ipcRenderer.invoke('evidence:submitAll', data),
   getAdaptiveParams: (userId: string) => ipcRenderer.invoke('adaptive:getParams', userId),
+  resetAdaptiveLearning: (userId: string) => ipcRenderer.invoke('adaptive:reset', userId),
 
   // ── 설정 ───────────────────────────────────────────────────
   getLLMSettings: () => ipcRenderer.invoke('settings:getLLM'),

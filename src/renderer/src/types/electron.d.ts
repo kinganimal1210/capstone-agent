@@ -76,6 +76,7 @@ declare global {
         userId: string; queryLogId: number; questionType: string; feedbacks: { evidenceLogId: number; feedback: 'interested' | 'not_interested'; chunkFeatures?: unknown }[]; totalEvidenceCount: number
       }) => Promise<{ success: boolean; updatedParams: any; updatedWeights?: any }>
       getAdaptiveParams: (userId: string) => Promise<Record<string, unknown>[]>
+      resetAdaptiveLearning: (userId: string) => Promise<{ success: boolean }>
 
       // 설정
       getLLMSettings: () => Promise<{
