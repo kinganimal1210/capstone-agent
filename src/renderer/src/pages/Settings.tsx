@@ -16,10 +16,12 @@ export function Settings() {
   const [isResetting, setIsResetting] = useState(false)
   const [resetMessage, setResetMessage] = useState('')
 
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+
   const handleResetLearning = async () => {
-    if (!confirm('학습된 가중치와 파라미터를 모두 초기화할까요? 이 작업은 되돌릴 수 없습니다.')) return
     setIsResetting(true)
     setResetMessage('')
+    setShowResetConfirm(false)
     try {
       await window.api.resetAdaptiveLearning('default')
       setResetMessage('학습 데이터가 초기화되었습니다. 다음 질문부터 기본값으로 시작합니다.')
@@ -228,13 +230,31 @@ export function Settings() {
           <p className="text-sm text-muted-foreground mb-4">
             Evidence 피드백으로 학습된 스코어링 가중치와 청킹 파라미터를 기본값으로 되돌립니다.
           </p>
-          <button
-            onClick={handleResetLearning}
-            disabled={isResetting}
-            className="px-4 py-2 border border-destructive text-destructive rounded-md text-sm hover:bg-destructive/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isResetting ? '초기화 중...' : '학습 데이터 초기화'}
-          </button>
+          {!showResetConfirm ? (
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              disabled={isResetting}
+              className="px-4 py-2 border border-destructive text-destructive rounded-md text-sm hover:bg-destructive/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isResetting ? '초기화 중...' : '학습 데이터 초기화'}
+            </button>
+          ) : (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-destructive">정말 초기화할까요?</span>
+              <button
+                onClick={handleResetLearning}
+                className="px-3 py-1.5 bg-destructive text-white rounded-md text-sm hover:bg-destructive/90 transition-colors"
+              >
+                확인
+              </button>
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="px-3 py-1.5 border border-border rounded-md text-sm hover:bg-accent transition-colors"
+              >
+                취소
+              </button>
+            </div>
+          )}
           {resetMessage && (
             <p className="text-sm text-muted-foreground mt-3">{resetMessage}</p>
           )}
