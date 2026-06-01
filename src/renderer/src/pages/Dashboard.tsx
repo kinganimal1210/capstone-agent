@@ -53,6 +53,16 @@ export function Dashboard() {
     setFeedbacks({}) // 새로운 쿼리 시 피드백 초기화
     setFeedbackSubmitted(false)
     try {
+      if (selectedSources.includes('git')) {
+        const savedGitPath = localStorage.getItem('gitRepoPath')
+        if (savedGitPath) {
+          const validation = await window.api.validateGitRepo(savedGitPath)
+          if (validation.valid) {
+            await window.api.updateProject(DEFAULT_PROJECT_ID, { gitPath: savedGitPath })
+          }
+        }
+      }
+
       // API 호출 (기본 프로젝트 ID 1 사용)
       const response = await window.api.query({
         projectId: 1, 

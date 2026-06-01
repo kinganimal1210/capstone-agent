@@ -431,6 +431,26 @@ export function buildContext(
     totalChars += chunk.text.length
   }
 
+  // 선택한 Data Source에 자료가 있지만 키워드 매칭이 전혀 없는 경우에도
+  // LLM이 "참고 자료 없음"으로 오판하지 않도록 상위 청크를 fallback으로 포함합니다.
+  if (selected.length === 0 && allChunks.length > 0) {
+    for (const chunk of allChunks) {
+      if (selected.length >= topK) break
+      if (totalChars + chunk.text.length > maxContextChars) {
+        const remaining = maxContextChars - totalChars
+        if (remaining > 100) {
+          const truncatedChunk = { ...chunk, text: truncate(chunk.text, remaining) }
+          selected.push(truncatedChunk)
+          totalChars += truncatedChunk.text.length
+        }
+        break
+      }
+
+      selected.push(chunk)
+      totalChars += chunk.text.length
+    }
+  }
+
   // Step 4: 최종 컨텍스트 블록 포맷팅
   const contextBlock = selected
     .map((c, i) => {

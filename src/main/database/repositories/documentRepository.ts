@@ -298,5 +298,31 @@ export const documentRepository = {
     rows.sort((a, b) => (a.rank as number) - (b.rank as number))
 
     return rows.slice(0, limit)
+  },
+
+  /**
+   * 키워드 검색 결과가 없을 때 사용할 최근 문서 청크를 조회합니다.
+   */
+  getChunksByProject(projectId: number, limit: number = 5): Record<string, unknown>[] {
+    const db = getDB()
+    const stmt = db.prepare(`
+      SELECT c.id, c.document_id, c.chunk_index, c.content, d.file_name, d.file_path
+      FROM document_chunks c
+      JOIN document_sources d ON c.document_id = d.id
+      WHERE d.project_id = ?
+      ORDER BY d.updated_at DESC, c.chunk_index ASC
+      LIMIT ?
+    `)
+    stmt.bind([projectId, limit])
+
+    const rows: Record<string, unknown>[] = []
+    while (stmt.step()) {
+      const row = stmt.getAsObject()
+      row.searchMode = 'fallback_recent'
+      row.rank = 0
+      rows.push(row)
+    }
+    stmt.free()
+    return rows
   }
 }

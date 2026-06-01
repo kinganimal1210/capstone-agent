@@ -3,7 +3,7 @@ import { queryLogRepository, aiLogRepository, evidenceLogRepository, meetingRepo
 import type { QueryRequest, QueryResponse, EvidenceFeedbackRequest, ToolType, DataSource, EvidenceItem } from '../../shared/types'
 import { buildChatMessages, type PromptBuildInput } from '../services/promptBuilder'
 import { callLLM, loadConfigFromEnv, LLMConfig, LLMProvider } from '../services/llmService'
-import { getRecentCommits, isValidGitRepo } from '../services/gitService'
+import { getRecentCommits, getRepoInfo, isValidGitRepo } from '../services/gitService'
 import { classifyQuestion } from '../services/questionClassifier'
 import { getParams, updateParamsFromBatch } from '../services/adaptiveParams'
 import { preprocessPrompt } from '../services/promptPreprocessor'
@@ -63,7 +63,29 @@ function collectSources(request: QueryRequest, projectGitPath: string): CollectS
 
   if (request.sources.includes('git') && projectGitPath) {
     try {
+      const repoInfo = getRepoInfo(projectGitPath)
+      sources.push({
+        type: 'git',
+        id: `repo-${repoInfo.currentBranch}`,
+        title: `Git 저장소 요약 (${repoInfo.currentBranch})`,
+        content: [
+          `저장소 경로: ${repoInfo.path}`,
+          `현재 브랜치: ${repoInfo.currentBranch}`,
+          `전체 커밋 수: ${repoInfo.totalCommits}`,
+          `마지막 커밋 날짜: ${repoInfo.lastCommitDate}`,
+          repoInfo.remoteUrl ? `원격 저장소: ${repoInfo.remoteUrl}` : null
+        ].filter(Boolean).join('\n')
+      })
+
       const commits = getRecentCommits(projectGitPath, 50)
+      debugData.retrievedChunks = commits.map((commit) => ({
+        source: 'git',
+        hash: commit.hash,
+        message: commit.message,
+        author: commit.author,
+        date: commit.date
+      }))
+      debugData.searchMode = 'git_log'
       commits.forEach(c => {
         sources.push({
           type: 'git',
@@ -87,32 +109,38 @@ function collectSources(request: QueryRequest, projectGitPath: string): CollectS
     tasks.forEach(t => sources.push({
       type: 'task',
       id: t.id as number,
-      title: `${t.title as string} (상태: ${t.status}, 마감: ${t.dueDate || '없음'})`,
+      title: `${t.title as string} (상태: ${t.status}, 마감: ${t.due_date || '없음'})`,
       content: `상태: ${t.status as string}, 우선순위: ${t.priority as string}, 담당자: ${t.assignee as string || '없음'}, 세부: ${t.description as string || ''}`
     }))
   }
 
   if (request.sources.includes('documents')) {
     const { keywords } = preprocessPrompt(request.prompt)
+    let matchedChunks: Record<string, unknown>[] = []
     if (keywords.length > 0) {
-      const matchedChunks = documentRepository.searchChunks(request.projectId, keywords, 30)
-      debugData.retrievedChunks = matchedChunks
-      debugData.searchMode = (matchedChunks[0] as any)?.searchMode || 'fts'
-      matchedChunks.forEach((c: any) => {
-        const contentStr = c.content as string
-        const lines = contentStr.split('\n').map(line => line.trim())
-        let firstLine = lines.find(line => line.length > 5 && /[a-zA-Z가-힣]/.test(line))
-                     || lines.find(line => line.length > 0) || ''
-        const preview = firstLine.length > 25 ? firstLine.substring(0, 25) + '...' : firstLine
-
-        sources.push({
-          type: 'document',
-          id: c.document_id,
-          title: `${c.file_name as string} (미리보기: "${preview}")`,
-          content: contentStr
-        })
-      })
+      matchedChunks = documentRepository.searchChunks(request.projectId, keywords, 30)
     }
+
+    if (matchedChunks.length === 0) {
+      matchedChunks = documentRepository.getChunksByProject(request.projectId, 30)
+    }
+
+    debugData.retrievedChunks = matchedChunks
+    debugData.searchMode = (matchedChunks[0] as any)?.searchMode || 'fallback_recent'
+    matchedChunks.forEach((c: any) => {
+      const contentStr = c.content as string
+      const lines = contentStr.split('\n').map(line => line.trim())
+      let firstLine = lines.find(line => line.length > 5 && /[a-zA-Z가-힣]/.test(line))
+                   || lines.find(line => line.length > 0) || ''
+      const preview = firstLine.length > 25 ? firstLine.substring(0, 25) + '...' : firstLine
+
+      sources.push({
+        type: 'document',
+        id: c.document_id,
+        title: `${c.file_name as string} (미리보기: "${preview}")`,
+        content: contentStr
+      })
+    })
   }
 
   return { sources, debugData }
@@ -213,8 +241,8 @@ export function registerQueryHandlers(ipcMain: IpcMain): void {
     try {
       const { keywords } = preprocessPrompt(request.prompt)
 
-      // 2. 소스 데이터 수집 (키워드가 없으면 불필요한 검색 생략 - Short-circuit)
-      const { sources, debugData } = keywords.length > 0 ? collectSources(request, projectGitPath) : { sources: [], debugData: { retrievedChunks: [], searchMode: 'fts' } }
+      // 2. 소스 데이터 수집
+      const { sources, debugData } = collectSources(request, projectGitPath)
 
       // 3. 질문 유형 분류 + 적응형 파라미터 조회
       const questionType = classifyQuestion(request.prompt)
