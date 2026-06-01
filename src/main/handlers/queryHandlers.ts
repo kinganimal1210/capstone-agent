@@ -52,9 +52,10 @@ function getQueryMetricsLogPath(): string {
 }
 
 function writeQueryMetricsLog(entry: QueryMetricsLogEntry): void {
+  const logPath = getQueryMetricsLogPath()
   const logLine = JSON.stringify(entry)
   try {
-    fs.appendFileSync(getQueryMetricsLogPath(), `${logLine}\n`, 'utf-8')
+    fs.appendFileSync(logPath, `${logLine}\n`, 'utf-8')
   } catch (error) {
     console.error('[QueryMetrics] 로그 파일 저장 실패:', error)
   }
@@ -73,6 +74,7 @@ function writeQueryMetricsLog(entry: QueryMetricsLogEntry): void {
       `tokens=${tokenText}`,
       `llmLatency=${entry.llmLatencyMs ?? '?'}ms`,
       `totalDuration=${entry.totalDurationMs}ms`,
+      `logPath=${logPath}`,
       `prompt="${entry.prompt.replace(/\s+/g, ' ').slice(0, 120)}"`
     ].join(' | ')
   )
@@ -281,6 +283,8 @@ function saveQueryLogs(
 }
 
 export function registerQueryHandlers(ipcMain: IpcMain): void {
+  console.log(`[QueryMetrics] enabled | logPath=${getQueryMetricsLogPath()}`)
+
   ipcMain.handle('query:run', async (_event, request: QueryRequest): Promise<QueryResponse> => {
     const startTime = Date.now()
     
