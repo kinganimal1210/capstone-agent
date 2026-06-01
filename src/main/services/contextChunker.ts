@@ -327,7 +327,6 @@ export function scoreChunk(
   keywords: string[],
   weights: ScoringWeights = DEFAULT_SCORING_WEIGHTS
 ): { score: number; features: ChunkFeatures } {
-  let baseScore = 0
   const features: ChunkFeatures = {
     keywordBase: 0,
     freqBonus: 0,
@@ -342,50 +341,51 @@ export function scoreChunk(
   for (const keyword of keywords) {
     const kwLower = keyword.toLowerCase()
     if (textLower.includes(kwLower)) {
-      // 기본 매칭 점수
-      features.keywordBase += weights.wKeywordBase
-      baseScore += weights.wKeywordBase
+      features.keywordBase += 1
 
       // 등장 횟수 보너스 (최대 3회까지)
       const regex = new RegExp(kwLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
       const matches = chunk.text.match(regex)
       if (matches && matches.length > 1) {
-        const freqBonus = Math.min(matches.length - 1, 3) * weights.wFreqBonus
-        features.freqBonus += freqBonus
-        baseScore += freqBonus
+        features.freqBonus += Math.min(matches.length - 1, 3)
       }
 
       // [개선 #3] 키워드가 청크 앞부분(20% 이내)에 등장하면 위치 보너스
       const position = textLower.indexOf(kwLower) / Math.max(chunk.text.length, 1)
       if (position < 0.2) {
-        features.positionBonus += weights.wPositionBonus
-        baseScore += weights.wPositionBonus
+        features.positionBonus += 1
       }
     }
 
     // [개선 #3] 소스 제목에 키워드가 포함되면 추가 보너스
     // 제목 매칭은 강한 관련성 신호이므로 본문 매칭보다 높은 가중치 부여
     if (titleLower.includes(kwLower)) {
-      features.titleMatch += weights.wTitleMatch
-      baseScore += weights.wTitleMatch
+      features.titleMatch += 1
     }
   }
 
+  const baseScore =
+    features.keywordBase * weights.wKeywordBase +
+    features.freqBonus * weights.wFreqBonus +
+    features.positionBonus * weights.wPositionBonus +
+    features.titleMatch * weights.wTitleMatch
+
   // 첫 번째 청크 보너스 (보통 제목·요약이 포함됨) - 단, 키워드 매칭이 성공한 경우에만 부여
-  if (chunk.chunkIndex === 0 && baseScore > 0) {
-    features.firstChunkBonus += weights.wFirstChunk
-    baseScore += weights.wFirstChunk
+  let scoredBase = baseScore
+  if (chunk.chunkIndex === 0 && scoredBase > 0) {
+    features.firstChunkBonus = 1
+    scoredBase += weights.wFirstChunk
   }
 
   // 소스 타입별 가중치
-  let score = baseScore
+  let score = scoredBase
   if (chunk.sourceType === 'meeting') {
     score *= weights.wMeetingType
-    features.sourceTypeBonus = score - baseScore
+    features.sourceTypeBonus = 1
   }
   if (chunk.sourceType === 'task') {
     score *= weights.wTaskType
-    features.sourceTypeBonus = score - baseScore
+    features.sourceTypeBonus = 1
   }
 
   return {

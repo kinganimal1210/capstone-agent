@@ -58,13 +58,13 @@ export const DEFAULT_WEIGHTS: ScoringWeights = {
 
 const DEFAULT_BAYESIAN_WEIGHTS: BayesianWeights = {
   ...DEFAULT_WEIGHTS,
-  wKeywordBase_n: 0,
-  wFreqBonus_n: 0,
-  wPositionBonus_n: 0,
-  wTitleMatch_n: 0,
-  wFirstChunk_n: 0,
-  wMeetingType_n: 0,
-  wTaskType_n: 0
+  wKeywordBase_n: 5,
+  wFreqBonus_n: 5,
+  wPositionBonus_n: 5,
+  wTitleMatch_n: 5,
+  wFirstChunk_n: 5,
+  wMeetingType_n: 5,
+  wTaskType_n: 5
 }
 
 // ── 파라미터 범위 제한 ───────────────────────────────────────────
@@ -88,6 +88,7 @@ const WEIGHT_BOUNDS = {
 
 /** 학습률 */
 const LEARNING_RATE = 0.1
+const WEIGHT_LEARNING_RATE = 0.2
 
 // ── 핵심 함수 ────────────────────────────────────────────────────
 
@@ -162,12 +163,17 @@ function updateWeight(
     'wKeywordBase_n' | 'wFreqBonus_n' | 'wPositionBonus_n' | 'wTitleMatch_n' |
     'wFirstChunk_n' | 'wMeetingType_n' | 'wTaskType_n'
   >,
-  signal: number
+  direction: 1 | -1,
+  featureValue: number
 ): void {
-  if (signal === 0) return
+  if (featureValue <= 0) return
   const n = current[nKey]
-  const next = ((current[key] * n) + signal) / (n + 1)
   const bounds = WEIGHT_BOUNDS[key]
+  const featureStrength = Math.min(1, featureValue / 3)
+  const target =
+    current[key] +
+    direction * WEIGHT_LEARNING_RATE * featureStrength * (bounds.max - bounds.min)
+  const next = ((current[key] * n) + clamp(target, bounds.min, bounds.max)) / (n + 1)
   current[key] = Math.round(clamp(next, bounds.min, bounds.max) * 1000) / 1000
   current[nKey] = n + 1
 }
@@ -192,13 +198,13 @@ export function updateWeightsFromFeedback(
 
     const direction = item.feedback === 'interested' ? 1 : -1
 
-    updateWeight(current, 'wKeywordBase', 'wKeywordBase_n', item.features.keywordBase * direction)
-    updateWeight(current, 'wFreqBonus', 'wFreqBonus_n', item.features.freqBonus * direction)
-    updateWeight(current, 'wPositionBonus', 'wPositionBonus_n', item.features.positionBonus * direction)
-    updateWeight(current, 'wTitleMatch', 'wTitleMatch_n', item.features.titleMatch * direction)
-    updateWeight(current, 'wFirstChunk', 'wFirstChunk_n', item.features.firstChunkBonus * direction)
-    updateWeight(current, 'wMeetingType', 'wMeetingType_n', item.features.sourceTypeBonus * direction)
-    updateWeight(current, 'wTaskType', 'wTaskType_n', item.features.sourceTypeBonus * direction)
+    updateWeight(current, 'wKeywordBase', 'wKeywordBase_n', direction, item.features.keywordBase)
+    updateWeight(current, 'wFreqBonus', 'wFreqBonus_n', direction, item.features.freqBonus)
+    updateWeight(current, 'wPositionBonus', 'wPositionBonus_n', direction, item.features.positionBonus)
+    updateWeight(current, 'wTitleMatch', 'wTitleMatch_n', direction, item.features.titleMatch)
+    updateWeight(current, 'wFirstChunk', 'wFirstChunk_n', direction, item.features.firstChunkBonus)
+    updateWeight(current, 'wMeetingType', 'wMeetingType_n', direction, item.features.sourceTypeBonus)
+    updateWeight(current, 'wTaskType', 'wTaskType_n', direction, item.features.sourceTypeBonus)
   }
 
   scoringWeightsRepository.upsert(userId, questionType, current)
