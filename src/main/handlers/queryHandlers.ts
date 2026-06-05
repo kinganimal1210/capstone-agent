@@ -238,6 +238,13 @@ async function executeLLM(messages: any[]) {
  * LLM 응답에서 "## 추천 액션" 섹션의 JSON을 파싱합니다.
  * 파싱 실패 시 빈 배열을 반환합니다.
  */
+/**
+ * LLM 응답에서 "## 추천 액션" 섹션을 제거하여 summary용 텍스트를 반환합니다.
+ */
+function stripSuggestedActionsSection(content: string): string {
+  return content.replace(/\n*##\s*추천 액션[\s\S]*/i, '').trim()
+}
+
 function parseSuggestedActions(content: string): SuggestedAction[] {
   try {
     const match = content.match(/##\s*추천 액션[\s\S]*?(\[[\s\S]*?\])/i)
@@ -297,7 +304,7 @@ function saveQueryLogs(
 
   const response: QueryResponse = {
     queryLogId,
-    summary: llmResponse.content,
+    summary: stripSuggestedActionsSection(llmResponse.content),
     evidence,
     suggestedActions,
     rawResponse: JSON.stringify(requestDetails)

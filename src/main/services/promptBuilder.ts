@@ -29,8 +29,12 @@ const FORMAT_INSTRUCTION = `
 (없음 또는 문서에서 확인되지 않은 부분)
 
 ## 추천 액션
-참고자료를 바탕으로 지금 당장 취할 수 있는 액션을 1~3개 아래 JSON 배열로만 작성하세요. 마크다운 코드블록 없이 순수 JSON만 출력하세요.
-[{"title":"액션 제목","description":"구체적인 설명","priority":"high|medium|low"}]
+참고자료를 바탕으로 지금 당장 취할 수 있는 구체적인 액션을 1~3개 JSON 배열로만 작성하세요.
+- title: 액션을 한 문장으로 (동사 시작, 예: "~를 완료하세요", "~를 확인하세요")
+- description: 왜 이 액션이 필요한지, 어떻게 실행해야 하는지 2~3문장으로 구체적으로 설명 (담당자, 마감일, 관련 항목 등 참고자료에서 파악한 정보를 포함)
+- priority: "high" (즉시), "medium" (이번 주), "low" (여유 있을 때)
+마크다운 코드블록 없이 순수 JSON만 출력하세요.
+[{"title":"액션 제목","description":"구체적인 실행 방법과 이유","priority":"high|medium|low"}]
 `;
 
 const SYSTEM_PROMPTS = {
