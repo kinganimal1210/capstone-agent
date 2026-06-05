@@ -1,0 +1,19 @@
+task mode: create
+primary deck-profile: engineering-platform
+secondary gates: product-platform story clarity for dashboard workflow
+required proof objects:
+- source/tool matrix from src/shared/types.ts and renderer selectors
+- Electron architecture map: Renderer, Preload IPC, Main handlers, DB/repositories, local git/files, LLM provider
+- RAG query pipeline from queryHandlers.ts, promptBuilder.ts, contextChunker.ts, adaptiveParams.ts
+- evidence feedback learning model and scoring weights
+- persistence/observability: sql.js database tables and query-metrics.log
+- latest GitHub state: branch c1 at 35b29fb
+asset requirements:
+- no external brand assets or unofficial logos
+brand authenticity constraints:
+- do not fabricate third-party logos or unverified brand assets
+profile-specific QA gates:
+- diagrams must retain technical labels at thumbnail and full-size render
+- slides need concrete source-backed claims rather than generic feature cards
+known missing inputs:
+- no quantitative user-study results were present in the repository
