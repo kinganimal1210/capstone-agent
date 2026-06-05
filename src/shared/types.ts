@@ -32,11 +32,17 @@ export interface QueryRequest {
   prompt: string
 }
 
+export interface SuggestedAction {
+  title: string
+  description: string
+  priority: 'high' | 'medium' | 'low'
+}
+
 export interface QueryResponse {
   queryLogId?: number
   summary: string
   evidence: EvidenceItem[]
-  suggestedActions: string[]
+  suggestedActions: SuggestedAction[]
   rawResponse?: string
 }
 

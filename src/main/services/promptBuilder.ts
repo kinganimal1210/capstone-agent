@@ -27,6 +27,10 @@ const FORMAT_INSTRUCTION = `
 
 ## 확실하지 않은 점
 (없음 또는 문서에서 확인되지 않은 부분)
+
+## 추천 액션
+참고자료를 바탕으로 지금 당장 취할 수 있는 액션을 1~3개 아래 JSON 배열로만 작성하세요. 마크다운 코드블록 없이 순수 JSON만 출력하세요.
+[{"title":"액션 제목","description":"구체적인 설명","priority":"high|medium|low"}]
 `;
 
 const SYSTEM_PROMPTS = {

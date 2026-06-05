@@ -1,7 +1,7 @@
 import { app, IpcMain } from 'electron'
 import fs from 'fs'
 import { queryLogRepository, aiLogRepository, evidenceLogRepository, meetingRepository, taskRepository, documentRepository, projectRepository, adaptiveParamsRepository, scoringWeightsRepository } from '../database/repositories'
-import type { QueryRequest, QueryResponse, EvidenceFeedbackRequest, ToolType, DataSource, EvidenceItem } from '../../shared/types'
+import type { QueryRequest, QueryResponse, EvidenceFeedbackRequest, ToolType, DataSource, EvidenceItem, SuggestedAction } from '../../shared/types'
 import { buildChatMessages, type PromptBuildInput } from '../services/promptBuilder'
 import { callLLM, loadConfigFromEnv, LLMConfig, LLMProvider } from '../services/llmService'
 import { getRecentCommits, getRepoInfo, isValidGitRepo } from '../services/gitService'
@@ -234,6 +234,29 @@ async function executeLLM(messages: any[]) {
   return await callLLM(messages, config)
 }
 
+/**
+ * LLM 응답에서 "## 추천 액션" 섹션의 JSON을 파싱합니다.
+ * 파싱 실패 시 빈 배열을 반환합니다.
+ */
+function parseSuggestedActions(content: string): SuggestedAction[] {
+  try {
+    const match = content.match(/##\s*추천 액션[\s\S]*?(\[[\s\S]*?\])/i)
+    if (!match) return []
+    const parsed = JSON.parse(match[1])
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((a: any) => typeof a.title === 'string' && typeof a.description === 'string')
+      .map((a: any) => ({
+        title: a.title,
+        description: a.description,
+        priority: (['high', 'medium', 'low'].includes(a.priority) ? a.priority : 'medium') as 'high' | 'medium' | 'low'
+      }))
+      .slice(0, 3)
+  } catch {
+    return []
+  }
+}
+
 function saveQueryLogs(
   queryLogId: number,
   llmResponse: any,
@@ -242,7 +265,7 @@ function saveQueryLogs(
   durationMs: number,
   requestDetails: any
 ): QueryResponse {
-  
+
   aiLogRepository.create({
     queryLogId,
     promptSent: messages[messages.length - 1].content as string,
@@ -270,11 +293,13 @@ function saveQueryLogs(
     }
   })
 
+  const suggestedActions = parseSuggestedActions(llmResponse.content)
+
   const response: QueryResponse = {
     queryLogId,
     summary: llmResponse.content,
     evidence,
-    suggestedActions: [],
+    suggestedActions,
     rawResponse: JSON.stringify(requestDetails)
   }
 
