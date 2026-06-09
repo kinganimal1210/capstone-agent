@@ -1,0 +1,5 @@
+﻿category,count,successCount,avgPromptTokens,avgCompletionTokens,avgTotalTokens,avgEstimatedTokens,avgLatencyMs,minTotalTokens,maxTotalTokens
+SS,20,20,349,91,440,384,2032,308,652
+SC,20,20,444,149,593,488,2624,314,904
+LS,20,20,503,169,673,569,3271,417,916
+LC,20,20,568,210,777,632,3395,415,1165

@@ -1,0 +1,5 @@
+category,count,avgPromptTokens,avgCompletionTokens,avgTotalTokens,avgLatencyMs
+SS,20,2517,195,2712,3844
+SC,20,2523,480,3003,6715
+LS,20,2543,573,3116,7374
+LC,7,2550,697,3247,8938
